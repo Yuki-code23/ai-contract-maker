@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import BackButton from '@/components/BackButton';
 import Sidebar from '@/components/Sidebar';
 import { CONTRACTS, Contract } from '@/data/contracts';
 
-export default function ContractsPage() {
+function ContractsContent() {
     const searchParams = useSearchParams();
     const companyFilter = searchParams.get('company');
     const [contracts, setContracts] = useState<Contract[]>([]);
@@ -168,5 +168,13 @@ export default function ContractsPage() {
                 </div>
             </div>
         </div>
+    );
+}
+
+export default function ContractsPage() {
+    return (
+        <Suspense fallback={<div>Loading...</div>}>
+            <ContractsContent />
+        </Suspense>
     );
 }
