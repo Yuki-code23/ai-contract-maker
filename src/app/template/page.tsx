@@ -738,42 +738,156 @@ export default function TemplatePage() {
                         )}
                     </div>
 
+                    {/* Template List Section */}
+                    <div className="mb-12">
+                        <h2 className="text-xl font-bold mb-6">テンプレートから作成</h2>
+                        {savedTemplates.length === 0 ? (
+                            <div className="text-center py-12">
+                                <p className="text-gray-500 dark:text-gray-400">テンプレート文書をアップロードしてください。</p>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {savedTemplates.map((template) => (
+                                    <div
+                                        key={template.id}
+                                        className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:border-blue-500 dark:hover:border-blue-500 transition-colors relative"
+                                    >
+                                        <div className="flex items-start gap-2 mb-3">
+                                            <div className="flex-1 min-w-0">
+                                                <h3 className="font-medium text-gray-900 dark:text-gray-100 truncate">
+                                                    {template.name}
+                                                </h3>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                                    {new Date(template.savedAt).toLocaleString('ja-JP')}
+                                                </p>
+                                            </div>
+
+                                            {/* Three-dot menu */}
+                                            <div className="relative flex-shrink-0">
+                                                <button
+                                                    onClick={() => setOpenMenuId(openMenuId === template.id ? null : template.id)}
+                                                    className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                                                    title="メニュー"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 12.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 18.75a.75.75 0 110-1.5.75.75 0 010 1.5z" />
+                                                    </svg>
+                                                </button>
+
+                                                {/* Dropdown menu */}
+                                                {openMenuId === template.id && (
+                                                    <div className="absolute right-0 mt-1 w-32 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg z-10">
+                                                        <button
+                                                            onClick={() => handleEditTemplate(template)}
+                                                            className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 rounded-t-md"
+                                                        >
+                                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                                                            </svg>
+                                                            編集
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDeleteTemplate(template.id)}
+                                                            className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 rounded-b-md"
+                                                        >
+                                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                                                            </svg>
+                                                            削除
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-2 mb-3">
+                                            <div className="text-sm">
+                                                <span className="text-gray-600 dark:text-gray-400">甲: </span>
+                                                <span className="text-gray-900 dark:text-gray-100">{template.partyA || '未設定'}</span>
+                                            </div>
+                                            <div className="text-sm">
+                                                <span className="text-gray-600 dark:text-gray-400">乙: </span>
+                                                <span className="text-gray-900 dark:text-gray-100">{template.partyB || '未設定'}</span>
+                                            </div>
+                                            <div className="text-sm">
+                                                <span className="text-gray-600 dark:text-gray-400">甲住所: </span>
+                                                <span className="text-gray-900 dark:text-gray-100">{template.addressA || '未設定'}</span>
+                                            </div>
+                                            <div className="text-sm">
+                                                <span className="text-gray-600 dark:text-gray-400">甲代表: </span>
+                                                <span className="text-gray-900 dark:text-gray-100">
+                                                    {template.presidentPositionA} {template.presidentNameA}
+                                                </span>
+                                            </div>
+                                            <div className="text-sm">
+                                                <span className="text-gray-600 dark:text-gray-400">乙住所: </span>
+                                                <span className="text-gray-900 dark:text-gray-100">{template.addressB || '未設定'}</span>
+                                            </div>
+                                            <div className="text-sm">
+                                                <span className="text-gray-600 dark:text-gray-400">乙代表: </span>
+                                                <span className="text-gray-900 dark:text-gray-100">
+                                                    {template.presidentPositionB} {template.presidentNameB}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-gray-50 dark:bg-gray-800 rounded p-3 mb-3">
+                                            <p className="text-xs text-gray-700 dark:text-gray-300 line-clamp-3">
+                                                {template.content.substring(0, 200)}...
+                                            </p>
+                                        </div>
+
+                                        <button
+                                            onClick={() => handleUseTemplate(template)}
+                                            className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors text-sm font-medium"
+                                        >
+                                            このテンプレートで作成する
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
                     {/* File Upload Section */}
                     {!isEditing && (
-                        <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-12 text-center">
-                            <input
-                                ref={fileInputRef}
-                                type="file"
-                                accept=".txt,.doc,.docx"
-                                onChange={handleFileUpload}
-                                className="hidden"
-                            />
-                            <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                strokeWidth={1.5}
-                                stroke="currentColor"
-                                className="w-16 h-16 mx-auto mb-4 text-gray-400"
-                            >
-                                <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12l-3-3m0 0l-3 3m3-3v6m-1.5-15H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"
+                        <div>
+                            <h2 className="text-xl font-bold mb-6">ファイルをアップロード</h2>
+                            <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-12 text-center">
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    accept=".txt,.doc,.docx"
+                                    onChange={handleFileUpload}
+                                    className="hidden"
                                 />
-                            </svg>
-                            <p className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                契約書テンプレートをアップロード
-                            </p>
-                            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                                .txt, .doc, .docx ファイルをドラッグ&ドロップまたはクリックして選択
-                            </p>
-                            <button
-                                onClick={() => fileInputRef.current?.click()}
-                                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
-                            >
-                                ファイルを選択
-                            </button>
+                                <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    strokeWidth={1.5}
+                                    stroke="currentColor"
+                                    className="w-16 h-16 mx-auto mb-4 text-gray-400"
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12l-3-3m0 0l-3 3m3-3v6m-1.5-15H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"
+                                    />
+                                </svg>
+                                <p className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    契約書テンプレートをアップロード
+                                </p>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                                    .txt, .doc, .docx ファイルをドラッグ&ドロップまたはクリックして選択
+                                </p>
+                                <button
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
+                                >
+                                    ファイルを選択
+                                </button>
+                            </div>
                         </div>
                     )}
 
@@ -1027,116 +1141,7 @@ export default function TemplatePage() {
                     )
                     }
 
-                    {/* Template List Section */}
-                    <div className="mt-12">
-                        <h2 className="text-xl font-bold mb-6">テンプレートから作成</h2>
-                        {savedTemplates.length === 0 ? (
-                            <div className="text-center py-12">
-                                <p className="text-gray-500 dark:text-gray-400">テンプレート文書をアップロードしてください。</p>
-                            </div>
-                        ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {savedTemplates.map((template) => (
-                                    <div
-                                        key={template.id}
-                                        className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:border-blue-500 dark:hover:border-blue-500 transition-colors relative"
-                                    >
-                                        <div className="flex items-start gap-2 mb-3">
-                                            <div className="flex-1 min-w-0">
-                                                <h3 className="font-medium text-gray-900 dark:text-gray-100 truncate">
-                                                    {template.name}
-                                                </h3>
-                                                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                                    {new Date(template.savedAt).toLocaleString('ja-JP')}
-                                                </p>
-                                            </div>
 
-                                            {/* Three-dot menu */}
-                                            <div className="relative flex-shrink-0">
-                                                <button
-                                                    onClick={() => setOpenMenuId(openMenuId === template.id ? null : template.id)}
-                                                    className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
-                                                    title="メニュー"
-                                                >
-                                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 12.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 18.75a.75.75 0 110-1.5.75.75 0 010 1.5z" />
-                                                    </svg>
-                                                </button>
-
-                                                {/* Dropdown menu */}
-                                                {openMenuId === template.id && (
-                                                    <div className="absolute right-0 mt-1 w-32 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg z-10">
-                                                        <button
-                                                            onClick={() => handleEditTemplate(template)}
-                                                            className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 rounded-t-md"
-                                                        >
-                                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
-                                                            </svg>
-                                                            編集
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleDeleteTemplate(template.id)}
-                                                            className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 rounded-b-md"
-                                                        >
-                                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                                                            </svg>
-                                                            削除
-                                                        </button>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-2 mb-3">
-                                            <div className="text-sm">
-                                                <span className="text-gray-600 dark:text-gray-400">甲: </span>
-                                                <span className="text-gray-900 dark:text-gray-100">{template.partyA || '未設定'}</span>
-                                            </div>
-                                            <div className="text-sm">
-                                                <span className="text-gray-600 dark:text-gray-400">乙: </span>
-                                                <span className="text-gray-900 dark:text-gray-100">{template.partyB || '未設定'}</span>
-                                            </div>
-                                            <div className="text-sm">
-                                                <span className="text-gray-600 dark:text-gray-400">甲住所: </span>
-                                                <span className="text-gray-900 dark:text-gray-100">{template.addressA || '未設定'}</span>
-                                            </div>
-                                            <div className="text-sm">
-                                                <span className="text-gray-600 dark:text-gray-400">甲代表: </span>
-                                                <span className="text-gray-900 dark:text-gray-100">
-                                                    {template.presidentPositionA} {template.presidentNameA}
-                                                </span>
-                                            </div>
-                                            <div className="text-sm">
-                                                <span className="text-gray-600 dark:text-gray-400">乙住所: </span>
-                                                <span className="text-gray-900 dark:text-gray-100">{template.addressB || '未設定'}</span>
-                                            </div>
-                                            <div className="text-sm">
-                                                <span className="text-gray-600 dark:text-gray-400">乙代表: </span>
-                                                <span className="text-gray-900 dark:text-gray-100">
-                                                    {template.presidentPositionB} {template.presidentNameB}
-                                                </span>
-                                            </div>
-                                        </div>
-
-                                        <div className="bg-gray-50 dark:bg-gray-800 rounded p-3 mb-3">
-                                            <p className="text-xs text-gray-700 dark:text-gray-300 line-clamp-3">
-                                                {template.content.substring(0, 200)}...
-                                            </p>
-                                        </div>
-
-                                        <button
-                                            onClick={() => handleUseTemplate(template)}
-                                            className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors text-sm font-medium"
-                                        >
-                                            このテンプレートで作成する
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
                 </div>
             </div>
         </div>
