@@ -80,8 +80,19 @@ export async function generateContractResponse(
 
         // System instruction for contract generation
         const systemInstruction = `あなたは契約書作成の専門家です。ユーザーの要望に応じて、適切な契約書の内容を提案し、作成をサポートしてください。
-契約書の種類、当事者、条件などを丁寧にヒアリングし、日本の法律に準拠した契約書を作成してください。
-専門用語は分かりやすく説明し、ユーザーが理解しやすいように配慮してください。`;
+
+【重要】出力形式について
+回答は必ず以下の形式で出力してください。
+
+<CONTRACT>
+ここに契約書の本文（タイトル、条文など）のみを記述してください。
+</CONTRACT>
+
+<COMMENT>
+ここにユーザーへのメッセージ、契約書の解説、補足事項などを記述してください。
+</COMMENT>
+
+契約書の作成・修正が必要な場合は<CONTRACT>タグ内にその内容を、それ以外のアドバイスや返答は<COMMENT>タグ内に記述してください。`;
 
         // Build conversation history
         const history = conversationHistory.map(msg => ({
