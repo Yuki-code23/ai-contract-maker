@@ -7,7 +7,9 @@ import { QUICK_ACCESS_ITEMS } from '@/data/quickAccess';
 
 export default function SettingsPage() {
     const [geminiApiKey, setGeminiApiKey] = useState('');
-    const [googleDriveApiKey, setGoogleDriveApiKey] = useState('');
+    const [googleApiKey, setGoogleApiKey] = useState('');
+    const [googleClientId, setGoogleClientId] = useState(''); // Added Client ID
+    const [googleDriveFolderId, setGoogleDriveFolderId] = useState(''); // Added Drive Folder ID
 
     // Party B Information State
     const [companyName, setCompanyName] = useState('');
@@ -38,9 +40,20 @@ export default function SettingsPage() {
 
         // Load API keys
         const savedGeminiKey = localStorage.getItem('geminiApiKey');
-        const savedGoogleDriveKey = localStorage.getItem('googleDriveApiKey');
+        const savedGoogleApiKey = localStorage.getItem('googleApiKey'); // Changed key name
+        // Fallback for old key name if exists
+        const oldGoogleDriveKey = localStorage.getItem('googleDriveApiKey');
+        const savedGoogleClientId = localStorage.getItem('googleClientId'); // Load Client ID
+        const savedGoogleDriveFolderId = localStorage.getItem('googleDriveFolderId');
+
         if (savedGeminiKey) setGeminiApiKey(savedGeminiKey);
-        if (savedGoogleDriveKey) setGoogleDriveApiKey(savedGoogleDriveKey);
+        if (savedGoogleApiKey) {
+            setGoogleApiKey(savedGoogleApiKey);
+        } else if (oldGoogleDriveKey) {
+            setGoogleApiKey(oldGoogleDriveKey);
+        }
+        if (savedGoogleClientId) setGoogleClientId(savedGoogleClientId);
+        if (savedGoogleDriveFolderId) setGoogleDriveFolderId(savedGoogleDriveFolderId);
 
         // Load Party B information
         const savedPartyB = localStorage.getItem('partyBInfo');
@@ -60,31 +73,52 @@ export default function SettingsPage() {
     }, []);
 
     const handleSave = () => {
-        // Save API keys to localStorage
-        localStorage.setItem('geminiApiKey', geminiApiKey);
-        localStorage.setItem('googleDriveApiKey', googleDriveApiKey);
+        try {
+            // Save API keys to localStorage
+            localStorage.setItem('geminiApiKey', geminiApiKey);
+            localStorage.setItem('googleApiKey', googleApiKey);
+            localStorage.setItem('googleClientId', googleClientId);
+            localStorage.setItem('googleDriveFolderId', googleDriveFolderId);
 
-        // Save Party B information to localStorage
-        const partyBInfo = {
-            companyName,
-            postalCode,
-            address,
-            building,
-            presidentTitle,
-            presidentName,
-            contactName,
-            email,
-            phone,
-            position,
-        };
-        localStorage.setItem('partyBInfo', JSON.stringify(partyBInfo));
+            // Save Party B information to localStorage
+            const partyBInfo = {
+                companyName,
+                postalCode,
+                address,
+                building,
+                presidentTitle,
+                presidentName,
+                contactName,
+                email,
+                phone,
+                position,
+            };
+            localStorage.setItem('partyBInfo', JSON.stringify(partyBInfo));
 
-        // Save Quick Access to localStorage
-        localStorage.setItem('quickAccess', JSON.stringify(selectedQuickAccess));
+            // Save Quick Access to localStorage
+            localStorage.setItem('quickAccess', JSON.stringify(selectedQuickAccess));
 
-        setIsSaved(true);
-        setTimeout(() => setIsSaved(false), 3000);
+            setIsSaved(true);
+            setTimeout(() => setIsSaved(false), 3000);
+        } catch (error) {
+            console.error('Save failed:', error);
+            alert('設定の保存中にエラーが発生しました。');
+        }
     };
+
+    // Add unhandled rejection handler to debug generic errors
+    useEffect(() => {
+        const handler = (event: PromiseRejectionEvent) => {
+            // Detailed logging for [object Object] errors
+            if (Object.prototype.toString.call(event.reason) === '[object Object]') {
+                console.error('Unhandled Rejection Details:', JSON.stringify(event.reason, null, 2));
+            } else {
+                console.error('Unhandled Rejection:', event.reason);
+            }
+        };
+        window.addEventListener('unhandledrejection', handler);
+        return () => window.removeEventListener('unhandledrejection', handler);
+    }, []);
 
     const toggleQuickAccessItem = (id: string) => {
         setSelectedQuickAccess(prev => {
@@ -124,19 +158,56 @@ export default function SettingsPage() {
                                 />
                             </div>
 
-                            {/* Google Drive API Key */}
+                            {/* Google Client ID */}
                             <div>
-                                <label htmlFor="google-drive-api-key" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Google Drive APIキー
+                                <label htmlFor="google-client-id" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Google Client ID
                                 </label>
                                 <input
-                                    id="google-drive-api-key"
-                                    type="password"
-                                    value={googleDriveApiKey}
-                                    onChange={(e) => setGoogleDriveApiKey(e.target.value)}
-                                    placeholder="Google Drive APIキーを入力してください"
+                                    id="google-client-id"
+                                    type="text"
+                                    value={googleClientId}
+                                    onChange={(e) => setGoogleClientId(e.target.value)}
+                                    placeholder="Google Cloud ConsoleのOAuth 2.0 クライアントID"
                                     className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 />
+                                <p className="text-xs text-gray-500 mt-1">Google Docs作成機能を使用するために必要です。</p>
+                            </div>
+
+                            {/* Google API Key */}
+                            <div>
+                                <label htmlFor="google-api-key" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Google API Key
+                                </label>
+                                <input
+                                    id="google-api-key"
+                                    type="password"
+                                    value={googleApiKey}
+                                    onChange={(e) => setGoogleApiKey(e.target.value)}
+                                    placeholder="Google APIキーを入力してください"
+                                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">Google Docs APIへのアクセスに必要です。</p>
+                            </div>
+
+                            {/* Google Drive Folder ID */}
+                            <div>
+                                <label htmlFor="google-drive-folder-id" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Google Drive Folder ID <span className="text-gray-500 text-xs font-normal">(任意)</span>
+                                </label>
+                                <input
+                                    id="google-drive-folder-id"
+                                    type="text"
+                                    value={googleDriveFolderId}
+                                    onChange={(e) => setGoogleDriveFolderId(e.target.value)}
+                                    placeholder="例: 1ABC...XYZ"
+                                    className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">
+                                    ※指定するとそのフォルダに保存されます。空欄の場合はルートに保存されます。
+                                    <br />
+                                    (フォルダのURLの `folders/` 以降の文字列です)
+                                </p>
                             </div>
                         </section>
 

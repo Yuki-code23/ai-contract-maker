@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import Script from 'next/script';
 import BackButton from '@/components/BackButton';
 import Sidebar from '@/components/Sidebar';
 import { generateContractResponse } from '@/lib/gemini';
@@ -10,6 +11,14 @@ interface Message {
     id: number;
     role: 'user' | 'assistant';
     content: string;
+}
+
+// Add types for global google and gapi objects
+declare global {
+    interface Window {
+        google: any;
+        gapi: any;
+    }
 }
 
 const PROMPT_TEMPLATES = [
@@ -45,30 +54,155 @@ export default function AIGenerationPage() {
     ]);
     const [input, setInput] = useState('');
     const [apiKey, setApiKey] = useState<string | null>(null);
+    const [googleClientId, setGoogleClientId] = useState<string | null>(null);
+    const [googleApiKey, setGoogleApiKey] = useState<string | null>(null);
+    const [googleDriveFolderId, setGoogleDriveFolderId] = useState<string | null>(null);
+
+    // Google Auth State
+    const [gapiInited, setGapiInited] = useState(false);
+    const [gisInited, setGisInited] = useState(false);
+    const [tokenClient, setTokenClient] = useState<any>(null);
+
+    // Script Load State
+    const [gapiScriptLoaded, setGapiScriptLoaded] = useState(false);
+    const [gisScriptLoaded, setGisScriptLoaded] = useState(false);
+
     const [isLoading, setIsLoading] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
     const [fileName, setFileName] = useState('contract');
+    const [showFolderSettings, setShowFolderSettings] = useState(false); // UI toggle for folder settings
     const [contractContent, setContractContent] = useState('');
     const chatEndRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const gapiInitializingRef = useRef(false);
 
     // Auto-resize textarea
     useEffect(() => {
         if (textareaRef.current) {
-            textareaRef.current.style.height = 'auto';
-            textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+            textareaRef.current.style.height = 'auto'; // Reset height
+            textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`; // Set new height
         }
     }, [input]);
 
-    // Load API key from localStorage on mount
+    // Load API keys from localStorage on mount
     useEffect(() => {
         const savedApiKey = localStorage.getItem('geminiApiKey');
+        const savedGoogleClientId = localStorage.getItem('googleClientId');
+        const savedGoogleApiKey = localStorage.getItem('googleApiKey');
+        // Fallback for old key name
+        const oldGoogleDriveKey = localStorage.getItem('googleDriveApiKey');
+        const savedFolderId = localStorage.getItem('googleDriveFolderId');
+
         setApiKey(savedApiKey);
+        setGoogleClientId(savedGoogleClientId);
+        setGoogleApiKey(savedGoogleApiKey || oldGoogleDriveKey);
+        setGoogleDriveFolderId(savedFolderId);
+
+        console.log('Keys loaded:', {
+            gemini: !!savedApiKey,
+            clientId: !!savedGoogleClientId,
+            googleKey: !!(savedGoogleApiKey || oldGoogleDriveKey),
+            folderId: !!savedFolderId
+        });
+    }, []);
+
+    // Check if scripts are already loaded (e.g. from cache or previous navigation)
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            if (window.gapi) {
+                console.log('window.gapi already exists');
+                setGapiScriptLoaded(true);
+            }
+            if (window.google) {
+                console.log('window.google already exists');
+                setGisScriptLoaded(true);
+            }
+        }
     }, []);
 
     // Auto-scroll to bottom when messages change
     useEffect(() => {
         chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
+
+    // Initialize Google API Client (GAPI)
+    useEffect(() => {
+        if (gapiScriptLoaded && googleApiKey && window.gapi && !gapiInited) {
+            if (gapiInitializingRef.current) {
+                console.log('GAPI init already in progress, skipping...');
+                return;
+            }
+
+            gapiInitializingRef.current = true;
+            console.log('Initializing GAPI...');
+
+            window.gapi.load('client', async () => {
+                try {
+                    console.log('GAPI client loaded, initializing with key...');
+                    await window.gapi.client.init({
+                        apiKey: googleApiKey,
+                        discoveryDocs: ['https://docs.googleapis.com/$discovery/rest?version=v1'],
+                    });
+
+                    // Explicitly load Drive API v3 to avoid discovery errors in init
+                    try {
+                        await window.gapi.client.load('drive', 'v3');
+                        console.log('Drive API loaded successfully');
+                    } catch (driveError) {
+                        console.warn('Failed to load Drive API:', driveError);
+                        // Continue anyway, as Docs API might still work
+                    }
+
+                    setGapiInited(true);
+                    console.log('GAPI initialized successfully');
+                } catch (error: any) {
+                    const errorBody = error.result || error;
+
+                    // Check for 403 SERVICE_DISABLED
+                    if (errorBody?.error?.code === 403 && errorBody?.error?.status === 'PERMISSION_DENIED') {
+                        const message = errorBody.error.message || '';
+                        if (message.includes('has not been used') || message.includes('disabled')) {
+                            console.warn('Google API is disabled. Alerting user.');
+                            alert('Google API (Docs/Drive) が有効になっていません。\nGoogle Cloud Consoleで「Google Docs API」と「Google Drive API」を有効にしてください。\n\nhttps://console.developers.google.com/apis/dashboard');
+                            gapiInitializingRef.current = false;
+                            return; // Suppress further error logging
+                        }
+                    }
+
+                    console.error('GAPI initialization failed:', error);
+                    console.error('GAPI error details:', JSON.stringify(error, null, 2));
+                    if (error?.result) console.error('GAPI error result:', error.result);
+
+                    // Reset init flag on error to allow retry if needed (though infinite loop risk if not careful)
+                    gapiInitializingRef.current = false;
+                }
+            });
+        } else {
+            // console.log('GAPI Init skipped:', { loaded: gapiScriptLoaded, hasKey: !!googleApiKey, hasWinGapi: !!window.gapi, inited: gapiInited });
+        }
+    }, [gapiScriptLoaded, googleApiKey, gapiInited]);
+
+    // Initialize Google Identity Services (GIS)
+    useEffect(() => {
+        if (gisScriptLoaded && googleClientId && window.google && !gisInited) {
+            console.log('Initializing GIS...');
+            try {
+                const client = window.google.accounts.oauth2.initTokenClient({
+                    client_id: googleClientId,
+                    scope: 'https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/drive.file', // Add Drive scope
+                    callback: '', // defined at request time
+                });
+                setTokenClient(client);
+                setGisInited(true);
+                console.log('GIS initialized successfully');
+            } catch (error) {
+                console.error('GIS initialization failed:', error);
+            }
+        } else {
+            console.log('GIS Init skipped:', { loaded: gisScriptLoaded, hasClientId: !!googleClientId, hasWinGoogle: !!window.google, inited: gisInited });
+        }
+    }, [gisScriptLoaded, googleClientId, gisInited]);
+
 
     const handleSend = async () => {
         if (!input.trim()) return;
@@ -121,12 +255,12 @@ export default function AIGenerationPage() {
                 setContractContent(contractPart);
             }
 
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error getting AI response:', error);
             const errorMessage: Message = {
                 id: messages.length + 2,
                 role: 'assistant',
-                content: 'エラーが発生しました。APIキーが正しいか確認してください。',
+                content: error.message || 'エラーが発生しました。APIキーが正しいか確認してください。',
             };
             setMessages((prev) => [...prev, errorMessage]);
         } finally {
@@ -190,8 +324,127 @@ export default function AIGenerationPage() {
         }
     };
 
+    // Export to Google Docs
+    const handleExportGoogleDocs = async () => {
+        if (!contractContent.trim()) {
+            alert('エクスポートする契約書の内容がありません。');
+            return;
+        }
+
+        if (!googleClientId || !googleApiKey) {
+            alert('Google Client IDとGoogle API Keyが設定されていません。設定画面で入力してください。');
+            return;
+        }
+
+        if (!gapiInited || !gisInited) {
+            // Try to force reload/check if not init
+            // But realistically, if it's not init yet, alerting is fine
+            alert('Google APIの初期化中です。しばらく待ってから再度お試しください。(ページをリロードすると改善する場合があります)');
+            return;
+        }
+
+        setIsSaving(true);
+
+        try {
+            // Request access token
+            tokenClient.callback = async (resp: any) => {
+                if (resp.error !== undefined) {
+                    throw (resp);
+                }
+
+                try {
+                    let documentId: string;
+
+                    if (googleDriveFolderId) {
+                        // Create file in specific folder using Drive API
+                        const createResponse = await window.gapi.client.drive.files.create({
+                            resource: {
+                                name: fileName,
+                                mimeType: 'application/vnd.google-apps.document',
+                                parents: [googleDriveFolderId]
+                            },
+                            fields: 'id'
+                        });
+                        documentId = createResponse.result.id;
+                    } else {
+                        // Default behavior: Create in root using Docs API
+                        const createResponse = await window.gapi.client.docs.documents.create({
+                            title: fileName,
+                        });
+                        documentId = createResponse.result.documentId;
+                    }
+
+                    // 2. Insert content
+                    // We split content by newline and insert it
+                    // For simplicity, we just insert the whole text at index 1
+                    const requests = [
+                        {
+                            insertText: {
+                                text: contractContent,
+                                location: {
+                                    index: 1,
+                                },
+                            },
+                        },
+                    ];
+
+                    await window.gapi.client.docs.documents.batchUpdate({
+                        documentId: documentId,
+                        resource: {
+                            requests: requests,
+                        },
+                    });
+
+                    alert(`Googleドキュメントを作成しました: ${fileName}`);
+                    // Optionally open the document
+                    window.open(`https://docs.google.com/document/d/${documentId}/edit`, '_blank');
+
+                } catch (apiError: any) {
+                    console.error('API Error:', apiError);
+
+                    const errorBody = apiError.result || apiError;
+                    if (errorBody?.error?.code === 403) {
+                        alert('権限エラーが発生しました。\n1. Google Cloud Consoleで「Google Drive API」が有効か確認してください。\n2. 指定したフォルダIDが正しいか確認してください。\n3. アプリの再認証が必要な場合があります（ページをリロードしてください）。');
+                    } else if (errorBody?.error?.code === 404) {
+                        alert('指定されたフォルダが見つかりません。フォルダIDを確認してください。');
+                    } else {
+                        alert(`ドキュメントの作成に失敗しました。\nError: ${apiError.message || JSON.stringify(apiError)}`);
+                    }
+                } finally {
+                    setIsSaving(false);
+                }
+            };
+
+            // Trigger OAuth flow
+            tokenClient.requestAccessToken({ prompt: '' });
+
+        } catch (error) {
+            console.error('Google Auth Error:', error);
+            setIsSaving(false);
+            alert('Google認証に失敗しました。');
+        }
+    };
+
     return (
         <div className="flex h-screen bg-white dark:bg-[#131314] text-gray-900 dark:text-gray-100 overflow-hidden">
+            {/* Load Google Scripts */}
+            <Script
+                src="https://apis.google.com/js/api.js"
+                strategy="afterInteractive"
+                onLoad={() => {
+                    setGapiScriptLoaded(true);
+                    console.log('GAPI Script Loaded');
+                }}
+            />
+            <Script
+                src="https://accounts.google.com/gsi/client"
+                strategy="afterInteractive"
+                onLoad={() => {
+                    setGisScriptLoaded(true);
+                    console.log('GIS Script Loaded');
+                }}
+            />
+
             <Sidebar />
             <div className="flex-1 flex flex-col h-full">
                 {/* Header */}
@@ -304,6 +557,29 @@ export default function AIGenerationPage() {
                         <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between bg-white dark:bg-[#131314]">
                             <h2 className="font-semibold text-gray-700 dark:text-gray-200">プレビュー</h2>
                             <div className="flex items-center gap-2">
+                                {/* Folder Settings Toggle */}
+                                <div className="relative flex items-center">
+                                    {showFolderSettings && (
+                                        <input
+                                            type="text"
+                                            value={googleDriveFolderId || ''}
+                                            onChange={(e) => setGoogleDriveFolderId(e.target.value)}
+                                            placeholder="フォルダID (任意)"
+                                            className="w-32 mr-2 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500"
+                                            title="保存先Google DriveフォルダID"
+                                        />
+                                    )}
+                                    <button
+                                        onClick={() => setShowFolderSettings(!showFolderSettings)}
+                                        className={`p-1.5 rounded-md transition-colors ${showFolderSettings ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400' : 'text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800'}`}
+                                        title="保存先フォルダ設定"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
+                                        </svg>
+                                    </button>
+                                </div>
+
                                 <input
                                     type="text"
                                     value={fileName}
@@ -330,6 +606,21 @@ export default function AIGenerationPage() {
                                         <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
                                     </svg>
                                     .docx
+                                </button>
+                                <button
+                                    onClick={handleExportGoogleDocs}
+                                    disabled={isSaving || !googleClientId || !googleApiKey}
+                                    className={`px-3 py-1 text-sm rounded-md transition-colors flex items-center gap-1 text-white ${!googleClientId || !googleApiKey ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#4285F4] hover:bg-[#3367D6]'
+                                        }`}
+                                    title="Googleドキュメントに保存"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+                                        <path d="M12 0c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm-2.033 16.01c.564-1.789 1.632-3.932 1.821-4.474.273-.787-.211-1.136-1.74.209l-.34-.64c1.744-1.897 5.335-2.326 4.113.613-.763 1.835-1.309 3.074-1.621 4.03-.378 1.163.521 1.013 1.833.47l.335.589c-2.903 3.202-6.631 2.158-4.401-4.828zm10.033-6.01h-2v2h2v-2zm-2 4h-2v2h2v-2z" />
+                                        <path d="M7 19h10V5H7v14z" fill="none" />
+                                        <path d="M14 15h3v-2h-3v2zm0-4h3V9h-3v2zm0-4h3V5h-3v2z" opacity=".3" />
+                                        <path d="M7 5v14h10V5H7zm10 10h-3v-2h3v2zm0-4h-3V9h3v2zm0-4h-3V5h3v2z" />
+                                    </svg>
+                                    {isSaving ? '保存中...' : 'Docs'}
                                 </button>
                             </div>
                         </div>

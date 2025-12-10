@@ -69,6 +69,41 @@ export async function extractPartiesFromText(text: string, apiKey: string): Prom
     }
 }
 
+// Utility for exponential backoff
+async function retryWithExponentialBackoff<T>(
+    operation: () => Promise<T>,
+    maxRetries: number = 3,
+    baseDelay: number = 1000
+): Promise<T> {
+    let retries = 0;
+    while (true) {
+        try {
+            return await operation();
+        } catch (error: any) {
+            // Check if it's a 503 Service Unavailable or 429 Too Many Requests
+            const isOverloaded = error.message?.includes('503') || error.message?.includes('429') || error.status === 503 || error.status === 429;
+
+            if (isOverloaded && retries < maxRetries) {
+                retries++;
+                const delay = baseDelay * Math.pow(2, retries - 1) + (Math.random() * 1000); // Add jitter
+                console.warn(`Gemini API overloaded. Retrying in ${Math.round(delay)}ms... (Attempt ${retries}/${maxRetries})`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                continue;
+            }
+
+            // If we've exhausted retries or it's a 429 error and we want to stop trying
+            if (error.message?.includes('429') || error.status === 429) {
+                const match = error.message?.match(/retry in ([0-9.]+)s/);
+                const waitTime = match ? match[1] : 'しばらく';
+                console.error(`Gemini API Limit Exceeded. Required wait: ${waitTime}s`);
+                throw new Error(`Gemini APIの利用制限（無料枠の制限など）に達しました。約${Number(waitTime) > 0 ? Math.ceil(Number(waitTime)) : 30}秒待ってから再度お試しください。`);
+            }
+
+            throw error;
+        }
+    }
+}
+
 export async function generateContractResponse(
     userMessage: string,
     conversationHistory: Array<{ role: 'user' | 'model'; parts: string }>,
@@ -114,7 +149,9 @@ export async function generateContractResponse(
             ? `${systemInstruction}\n\nユーザー: ${userMessage}`
             : userMessage;
 
-        const result = await chat.sendMessage(fullMessage);
+        // Wrap sendMessage with retry logic
+        const result = await retryWithExponentialBackoff(() => chat.sendMessage(fullMessage));
+
         const response = await result.response;
         const text = response.text();
 
