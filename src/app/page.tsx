@@ -1,17 +1,9 @@
 import Sidebar from "@/components/Sidebar";
 import Link from "next/link";
-import { auth } from "@/auth";
-import { redirect } from "next/navigation";
 
 import QuickAccessGrid from "@/components/QuickAccessGrid";
 
-export default async function Home() {
-  const session = await auth();
-
-  if (!session) {
-    redirect('/login');
-  }
-
+export default function Home() {
   return (
     <div className="flex h-screen bg-white dark:bg-[#131314] text-gray-900 dark:text-gray-100 overflow-hidden font-sans">
       {/* Sidebar */}
