@@ -32,7 +32,7 @@ export default async function Home() {
 
           {/* Hero Section with Search */}
           <section className="text-center space-y-8">
-            <h1 className="text-2xl font-semibold mb-1">
+            <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-transparent">
               こんにちは、{session.user?.name || 'ユーザー'}さん
             </h1>
             <p className="text-xl text-gray-500 dark:text-gray-400">
