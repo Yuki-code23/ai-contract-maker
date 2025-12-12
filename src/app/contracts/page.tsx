@@ -6,6 +6,7 @@ import BackButton from '@/components/BackButton';
 import Sidebar from '@/components/Sidebar';
 import { CONTRACTS, Contract } from '@/data/contracts';
 import { getContracts, deleteContract } from '../actions/contracts';
+import { UserMenu } from '@/components/UserMenu';
 
 function ContractsContent() {
     const searchParams = useSearchParams();
@@ -112,15 +113,18 @@ function ContractsContent() {
                                 </div>
                             )}
                         </div>
-                        <button
-                            onClick={() => window.location.href = '/contracts/new'}
-                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors font-medium flex items-center gap-2"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                            </svg>
-                            契約を追加
-                        </button>
+                        <div className="flex items-center gap-4">
+                            <button
+                                onClick={() => window.location.href = '/contracts/new'}
+                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors font-medium flex items-center gap-2"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                                </svg>
+                                契約を追加
+                            </button>
+                            <UserMenu />
+                        </div>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="min-w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">

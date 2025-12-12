@@ -6,7 +6,8 @@ import Script from 'next/script';
 import BackButton from '@/components/BackButton';
 import Sidebar from '@/components/Sidebar';
 import { generateContractResponse } from '@/lib/gemini';
-import { getUserSettings } from '@/app/actions/settings';
+import { getUserSettings, migrateSettings } from '../actions/settings';
+import { UserMenu } from '@/components/UserMenu';
 
 interface Message {
     id: number;
@@ -450,6 +451,7 @@ export default function AIGenerationPage() {
                         <BackButton />
                     </div>
                     <h1 className="text-2xl font-bold flex-1">AI契約書作成</h1>
+                    <UserMenu />
                 </header>
 
                 {/* API Key Warning */}

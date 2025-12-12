@@ -5,6 +5,7 @@ import { authOptions } from "@/auth";
 import { redirect } from "next/navigation";
 
 import QuickAccessGrid from "@/components/QuickAccessGrid";
+import { UserMenu } from "@/components/UserMenu";
 
 export default async function Home() {
   const session = await getServerSession(authOptions);
@@ -23,9 +24,7 @@ export default async function Home() {
 
         {/* Top Bar */}
         <header className="p-4 flex justify-end items-center">
-          <div className="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
-            U
-          </div>
+          <UserMenu />
         </header>
 
         <div className="flex-1 max-w-5xl mx-auto w-full p-8 space-y-12">

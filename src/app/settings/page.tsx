@@ -6,6 +6,7 @@ import BackButton from '@/components/BackButton';
 import Sidebar from '@/components/Sidebar';
 import { QUICK_ACCESS_ITEMS } from '@/data/quickAccess';
 import { getUserSettings, saveUserSettings, migrateSettings } from '../actions/settings';
+import { UserMenu } from '@/components/UserMenu';
 
 export default function SettingsPage() {
     const [geminiApiKey, setGeminiApiKey] = useState('');
@@ -191,8 +192,13 @@ export default function SettingsPage() {
             <Sidebar />
             <div className="flex-1 overflow-y-auto">
                 <div className="p-8 max-w-4xl mx-auto">
-                    <BackButton />
-                    <h1 className="text-2xl font-bold mb-6">設定</h1>
+                    <div className="flex items-center justify-between mb-6">
+                        <div className="flex items-center gap-4">
+                            <BackButton />
+                            <h1 className="text-2xl font-bold">設定</h1>
+                        </div>
+                        <UserMenu />
+                    </div>
 
                     <div className="space-y-8">
                         {/* API Keys Section */}

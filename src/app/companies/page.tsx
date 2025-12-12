@@ -6,6 +6,7 @@ import Sidebar from '@/components/Sidebar';
 import { CONTRACTS, Contract } from '@/data/contracts';
 import { getCompanies, deleteCompany, migrateCompanies, createCompany } from '../actions/companies';
 import { getContracts } from '../actions/contracts';
+import { UserMenu } from '@/components/UserMenu';
 
 interface Company {
     id: number;
@@ -201,6 +202,7 @@ export default function CompaniesPage() {
                             >
                                 サンプルデータで初期化
                             </button>
+                            <UserMenu />
                         </div>
                     </div>
                     <div className="overflow-x-auto">

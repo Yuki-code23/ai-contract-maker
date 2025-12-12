@@ -8,6 +8,7 @@ import { extractPartiesFromText } from '@/lib/gemini';
 import { getTemplates, createTemplate, updateTemplate, deleteTemplate, migrateTemplates } from '@/app/actions/templates';
 import { getCompanies } from '@/app/actions/companies';
 import { getUserSettings } from '@/app/actions/settings';
+import { UserMenu } from '@/components/UserMenu';
 
 interface SavedTemplate {
     id: string;
@@ -677,16 +678,19 @@ export default function TemplatePage() {
             <Sidebar />
             <div className="flex-1 overflow-y-auto">
                 <div className="p-8 max-w-6xl mx-auto">
-                    <BackButton />
-                    <div className="flex items-center gap-4 mb-6">
-                        <h1 className="text-2xl font-bold">
-                            {editingTemplateId ? 'テンプレート編集' : 'テンプレート'}
-                        </h1>
-                        {editingTemplateId && (
-                            <span className="px-3 py-1 bg-orange-100 text-orange-800 text-sm font-medium rounded-full border border-orange-200">
-                                テンプレートを収集中
-                            </span>
-                        )}
+                    <div className="flex items-center justify-between mb-6">
+                        <div className="flex items-center gap-4">
+                            <BackButton />
+                            <h1 className="text-2xl font-bold">
+                                {editingTemplateId ? 'テンプレート編集' : 'テンプレート'}
+                            </h1>
+                            {editingTemplateId && (
+                                <span className="px-3 py-1 bg-orange-100 text-orange-800 text-sm font-medium rounded-full border border-orange-200">
+                                    テンプレートを収集中
+                                </span>
+                            )}
+                        </div>
+                        <UserMenu />
                     </div>
 
                     {/* Template List Section */}
