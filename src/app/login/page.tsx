@@ -1,14 +1,6 @@
-import { signIn, auth } from "@/auth"
-import { redirect } from "next/navigation"
+import { signIn } from "@/auth"
 
-export default async function LoginPage() {
-    const session = await auth();
-
-    // If already logged in, redirect to home
-    if (session) {
-        redirect('/');
-    }
-
+export default function LoginPage() {
     return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
             <div className="bg-white p-8 rounded-lg shadow-xl max-w-md w-full">
