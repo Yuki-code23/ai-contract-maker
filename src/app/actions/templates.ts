@@ -1,11 +1,12 @@
 'use server'
 
-import { auth } from '@/auth'
+import { getServerSession } from 'next-auth/next'
+import { authOptions } from '@/auth'
 import { supabaseServer } from '@/lib/supabase/server'
 import { Template } from '@/lib/db'
 
 export async function getTemplates() {
-    const session = await auth()
+    const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
         return []
     }
@@ -38,7 +39,7 @@ export async function getTemplates() {
 }
 
 export async function getTemplate(id: string) {
-    const session = await auth()
+    const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
         throw new Error("Unauthorized")
     }
@@ -72,7 +73,7 @@ export async function getTemplate(id: string) {
 }
 
 export async function createTemplate(template: any) {
-    const session = await auth()
+    const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
         throw new Error("Unauthorized")
     }
@@ -107,7 +108,7 @@ export async function createTemplate(template: any) {
 }
 
 export async function updateTemplate(id: string, template: any) {
-    const session = await auth()
+    const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
         throw new Error("Unauthorized")
     }
@@ -140,7 +141,7 @@ export async function updateTemplate(id: string, template: any) {
 }
 
 export async function deleteTemplate(id: string) {
-    const session = await auth()
+    const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
         throw new Error("Unauthorized")
     }
@@ -158,7 +159,7 @@ export async function deleteTemplate(id: string) {
 }
 
 export async function migrateTemplates(templates: any[]) {
-    const session = await auth()
+    const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
         return
     }

@@ -1,11 +1,12 @@
 'use server'
 
-import { auth } from '@/auth'
+import { getServerSession } from 'next-auth/next'
+import { authOptions } from '@/auth'
 import { supabaseServer } from '@/lib/supabase/server'
 import { Company } from '@/lib/db'
 
 export async function getCompanies() {
-    const session = await auth()
+    const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
         return []
     }
@@ -38,7 +39,7 @@ export async function getCompanies() {
 }
 
 export async function getCompany(id: number) {
-    const session = await auth()
+    const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
         throw new Error("Unauthorized")
     }
@@ -72,7 +73,7 @@ export async function getCompany(id: number) {
 }
 
 export async function createCompany(company: Omit<Company, 'id' | 'user_email' | 'created_at' | 'updated_at'> | any) {
-    const session = await auth()
+    const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
         throw new Error("Unauthorized")
     }
@@ -106,7 +107,7 @@ export async function createCompany(company: Omit<Company, 'id' | 'user_email' |
 }
 
 export async function updateCompany(id: number, company: Partial<Company> | any) {
-    const session = await auth()
+    const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
         throw new Error("Unauthorized")
     }
@@ -139,7 +140,7 @@ export async function updateCompany(id: number, company: Partial<Company> | any)
 }
 
 export async function deleteCompany(id: number) {
-    const session = await auth()
+    const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
         throw new Error("Unauthorized")
     }
@@ -157,7 +158,7 @@ export async function deleteCompany(id: number) {
 }
 
 export async function migrateCompanies(companies: any[]) {
-    const session = await auth()
+    const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
         return
     }

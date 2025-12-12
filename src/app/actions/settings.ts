@@ -1,11 +1,12 @@
 'use server'
 
-import { auth } from "@/auth"
+import { getServerSession } from 'next-auth/next'
+import { authOptions } from '@/auth'
 import { supabaseServer } from "@/lib/supabase/server"
 import { UserSettings } from "@/lib/db"
 
 export async function getUserSettings() {
-    const session = await auth()
+    const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
         throw new Error("Unauthorized")
     }
@@ -25,7 +26,7 @@ export async function getUserSettings() {
 }
 
 export async function saveUserSettings(settings: Partial<UserSettings>) {
-    const session = await auth()
+    const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
         throw new Error("Unauthorized")
     }

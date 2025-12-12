@@ -1,11 +1,12 @@
 'use server'
 
-import { auth } from "@/auth"
+import { getServerSession } from 'next-auth/next'
+import { authOptions } from '@/auth'
 import { supabaseServer } from "@/lib/supabase/server"
 import { Contract } from "@/lib/db"
 
 export async function getContracts() {
-    const session = await auth()
+    const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
         throw new Error("Unauthorized")
     }
@@ -45,7 +46,7 @@ export async function getContracts() {
 }
 
 export async function getContract(id: number) {
-    const session = await auth()
+    const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
         throw new Error("Unauthorized")
     }
@@ -76,7 +77,7 @@ export async function getContract(id: number) {
 }
 
 export async function createContract(contract: Omit<Contract, 'id' | 'user_email' | 'created_at' | 'updated_at'> | any) {
-    const session = await auth()
+    const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
         throw new Error("Unauthorized")
     }
@@ -107,7 +108,7 @@ export async function createContract(contract: Omit<Contract, 'id' | 'user_email
 }
 
 export async function updateContract(id: number, contract: any) {
-    const session = await auth()
+    const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
         throw new Error("Unauthorized")
     }
@@ -138,7 +139,7 @@ export async function updateContract(id: number, contract: any) {
 }
 
 export async function deleteContract(id: number) {
-    const session = await auth()
+    const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
         throw new Error("Unauthorized")
     }
