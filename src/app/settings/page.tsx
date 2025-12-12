@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { signOut } from 'next-auth/react';
 import BackButton from '@/components/BackButton';
 import Sidebar from '@/components/Sidebar';
 import { QUICK_ACCESS_ITEMS } from '@/data/quickAccess';
@@ -391,6 +392,22 @@ export default function SettingsPage() {
                                         </label>
                                     </div>
                                 ))}
+                            </div>
+                        </section>
+
+                        {/* Account Settings */}
+                        <section className="space-y-4">
+                            <h2 className="text-lg font-semibold border-b pb-2 dark:border-gray-700">アカウント設定</h2>
+                            <div>
+                                <button
+                                    onClick={() => signOut({ callbackUrl: "/login" })}
+                                    className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md transition-colors"
+                                >
+                                    ログアウト
+                                </button>
+                                <p className="text-xs text-gray-500 mt-2">
+                                    アカウントからログアウトし、ログイン画面に戻ります。
+                                </p>
                             </div>
                         </section>
 

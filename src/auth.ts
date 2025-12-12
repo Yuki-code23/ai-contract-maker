@@ -12,21 +12,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         signIn: '/login',
     },
     callbacks: {
-        authorized({ auth, request: { nextUrl } }) {
-            const isLoggedIn = !!auth?.user
-            const isOnLoginPage = nextUrl.pathname === '/login'
-
-            if (isOnLoginPage) {
-                if (isLoggedIn) {
-                    // Redirect logged-in users away from login page
-                    return Response.redirect(new URL('/', nextUrl))
-                }
-                return true
-            }
-
-            // All other pages require authentication
-            return isLoggedIn
-        },
         async jwt({ token, user, account }) {
             // Initial sign in
             if (user) {
