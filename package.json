@@ -9,11 +9,14 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@auth/supabase-adapter": "^1.11.1",
     "@google/generative-ai": "^0.24.1",
+    "@supabase/supabase-js": "^2.87.1",
     "docx": "^9.5.1",
     "encoding-japanese": "^2.2.0",
     "mammoth": "^1.11.0",
     "next": "^16.0.8",
+    "next-auth": "^5.0.0-beta.30",
     "react": "^19.2.1",
     "react-dom": "^19.2.1"
   },
