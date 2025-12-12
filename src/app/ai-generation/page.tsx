@@ -6,6 +6,7 @@ import Script from 'next/script';
 import BackButton from '@/components/BackButton';
 import Sidebar from '@/components/Sidebar';
 import { generateContractResponse } from '@/lib/gemini';
+import { getUserSettings } from '@/app/actions/settings';
 
 interface Message {
     id: number;
@@ -84,26 +85,22 @@ export default function AIGenerationPage() {
         }
     }, [input]);
 
-    // Load API keys from localStorage on mount
+    // Load API keys from user settings on mount
     useEffect(() => {
-        const savedApiKey = localStorage.getItem('geminiApiKey');
-        const savedGoogleClientId = localStorage.getItem('googleClientId');
-        const savedGoogleApiKey = localStorage.getItem('googleApiKey');
-        // Fallback for old key name
-        const oldGoogleDriveKey = localStorage.getItem('googleDriveApiKey');
-        const savedFolderId = localStorage.getItem('googleDriveFolderId');
-
-        setApiKey(savedApiKey);
-        setGoogleClientId(savedGoogleClientId);
-        setGoogleApiKey(savedGoogleApiKey || oldGoogleDriveKey);
-        setGoogleDriveFolderId(savedFolderId);
-
-        console.log('Keys loaded:', {
-            gemini: !!savedApiKey,
-            clientId: !!savedGoogleClientId,
-            googleKey: !!(savedGoogleApiKey || oldGoogleDriveKey),
-            folderId: !!savedFolderId
-        });
+        const loadSettings = async () => {
+            try {
+                const settings = await getUserSettings();
+                if (settings) {
+                    setApiKey(settings.gemini_api_key || null);
+                    setGoogleClientId(settings.google_client_id || null);
+                    setGoogleApiKey(settings.google_api_key || null);
+                    setGoogleDriveFolderId(settings.google_drive_folder_id || null);
+                }
+            } catch (error) {
+                console.error('Failed to load settings:', error);
+            }
+        };
+        loadSettings();
     }, []);
 
     // Check if scripts are already loaded (e.g. from cache or previous navigation)
@@ -560,14 +557,9 @@ export default function AIGenerationPage() {
                                 {/* Folder Settings Toggle */}
                                 <div className="relative flex items-center">
                                     {showFolderSettings && (
-                                        <input
-                                            type="text"
-                                            value={googleDriveFolderId || ''}
-                                            onChange={(e) => setGoogleDriveFolderId(e.target.value)}
-                                            placeholder="フォルダID (任意)"
-                                            className="w-32 mr-2 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500"
-                                            title="保存先Google DriveフォルダID"
-                                        />
+                                        <div className="text-xs text-gray-500 mr-2">
+                                            フォルダ保存先変更は設定画面で行ってください
+                                        </div>
                                     )}
                                     <button
                                         onClick={() => setShowFolderSettings(!showFolderSettings)}

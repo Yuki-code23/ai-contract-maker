@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { signOut } from 'next-auth/react';
 import BackButton from '@/components/BackButton';
 import Sidebar from '@/components/Sidebar';
 import { QUICK_ACCESS_ITEMS } from '@/data/quickAccess';
+import { getUserSettings, saveUserSettings, migrateSettings } from '../actions/settings';
 
 export default function SettingsPage() {
     const [geminiApiKey, setGeminiApiKey] = useState('');
@@ -30,58 +31,95 @@ export default function SettingsPage() {
     const [isSaved, setIsSaved] = useState(false);
 
     useEffect(() => {
-        // Load saved settings from localStorage
-        const savedQuickAccess = localStorage.getItem('quickAccess');
-        if (savedQuickAccess) {
-            setSelectedQuickAccess(JSON.parse(savedQuickAccess));
-        } else {
-            // Default to all selected
-            setSelectedQuickAccess(QUICK_ACCESS_ITEMS.map(item => item.id));
-        }
+        const loadSettings = async () => {
+            try {
+                // Try to get settings from server first
+                const settings = await getUserSettings();
 
-        // Load API keys
-        const savedGeminiKey = localStorage.getItem('geminiApiKey');
-        const savedGoogleApiKey = localStorage.getItem('googleApiKey'); // Changed key name
-        // Fallback for old key name if exists
-        const oldGoogleDriveKey = localStorage.getItem('googleDriveApiKey');
-        const savedGoogleClientId = localStorage.getItem('googleClientId'); // Load Client ID
-        const savedGoogleDriveFolderId = localStorage.getItem('googleDriveFolderId');
+                if (settings) {
+                    // Load from server
+                    setGeminiApiKey(settings.gemini_api_key || '');
+                    setGoogleApiKey(settings.google_api_key || '');
+                    setGoogleClientId(settings.google_client_id || '');
+                    setGoogleDriveFolderId(settings.google_drive_folder_id || '');
 
-        if (savedGeminiKey) setGeminiApiKey(savedGeminiKey);
-        if (savedGoogleApiKey) {
-            setGoogleApiKey(savedGoogleApiKey);
-        } else if (oldGoogleDriveKey) {
-            setGoogleApiKey(oldGoogleDriveKey);
-        }
-        if (savedGoogleClientId) setGoogleClientId(savedGoogleClientId);
-        if (savedGoogleDriveFolderId) setGoogleDriveFolderId(savedGoogleDriveFolderId);
+                    if (settings.party_b_info) {
+                        const partyB = settings.party_b_info;
+                        setCompanyName(partyB.companyName || '');
+                        setPostalCode(partyB.postalCode || '');
+                        setAddress(partyB.address || '');
+                        setBuilding(partyB.building || '');
+                        setPresidentTitle(partyB.presidentTitle || '');
+                        setPresidentName(partyB.presidentName || '');
+                        setContactName(partyB.contactName || '');
+                        setEmail(partyB.email || '');
+                        setPhone(partyB.phone || '');
+                        setPosition(partyB.position || '');
+                    }
 
-        // Load Party B information
-        const savedPartyB = localStorage.getItem('partyBInfo');
-        if (savedPartyB) {
-            const partyBData = JSON.parse(savedPartyB);
-            setCompanyName(partyBData.companyName || '');
-            setPostalCode(partyBData.postalCode || '');
-            setAddress(partyBData.address || '');
-            setBuilding(partyBData.building || '');
-            setPresidentTitle(partyBData.presidentTitle || '');
-            setPresidentName(partyBData.presidentName || '');
-            setContactName(partyBData.contactName || '');
-            setEmail(partyBData.email || '');
-            setPhone(partyBData.phone || '');
-            setPosition(partyBData.position || '');
-        }
+                    if (settings.quick_access) {
+                        setSelectedQuickAccess(settings.quick_access);
+                    }
+                } else {
+                    // No settings on server, check localStorage for migration
+                    console.log('No server settings found, checking localStorage for migration...');
+                    const savedGeminiKey = localStorage.getItem('geminiApiKey');
+                    const savedGoogleApiKey = localStorage.getItem('googleApiKey') || localStorage.getItem('googleDriveApiKey');
+                    const savedGoogleClientId = localStorage.getItem('googleClientId');
+                    const savedGoogleDriveFolderId = localStorage.getItem('googleDriveFolderId');
+                    const savedPartyB = localStorage.getItem('partyBInfo');
+                    const savedQuickAccess = localStorage.getItem('quickAccess');
+
+                    if (savedGeminiKey || savedGoogleApiKey || savedGoogleClientId || savedGoogleDriveFolderId || savedPartyB || savedQuickAccess) {
+                        const partyBInfo = savedPartyB ? JSON.parse(savedPartyB) : {};
+                        const quickAccess = savedQuickAccess ? JSON.parse(savedQuickAccess) : QUICK_ACCESS_ITEMS.map(item => item.id);
+
+                        const migrationData = {
+                            gemini_api_key: savedGeminiKey || undefined,
+                            google_api_key: savedGoogleApiKey || undefined,
+                            google_client_id: savedGoogleClientId || undefined,
+                            google_drive_folder_id: savedGoogleDriveFolderId || undefined,
+                            party_b_info: partyBInfo,
+                            quick_access: quickAccess
+                        };
+
+                        // Migrate to server
+                        await migrateSettings(migrationData);
+                        console.log('Migrated settings to Supabase');
+
+                        // Set state
+                        if (savedGeminiKey) setGeminiApiKey(savedGeminiKey);
+                        if (savedGoogleApiKey) setGoogleApiKey(savedGoogleApiKey);
+                        if (savedGoogleClientId) setGoogleClientId(savedGoogleClientId);
+                        if (savedGoogleDriveFolderId) setGoogleDriveFolderId(savedGoogleDriveFolderId);
+
+                        setCompanyName(partyBInfo.companyName || '');
+                        setPostalCode(partyBInfo.postalCode || '');
+                        setAddress(partyBInfo.address || '');
+                        setBuilding(partyBInfo.building || '');
+                        setPresidentTitle(partyBInfo.presidentTitle || '');
+                        setPresidentName(partyBInfo.presidentName || '');
+                        setContactName(partyBInfo.contactName || '');
+                        setEmail(partyBInfo.email || '');
+                        setPhone(partyBInfo.phone || '');
+                        setPosition(partyBInfo.position || '');
+
+                        setSelectedQuickAccess(quickAccess);
+                    } else {
+                        // Default quick access
+                        setSelectedQuickAccess(QUICK_ACCESS_ITEMS.map(item => item.id));
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load settings:', error);
+            }
+        };
+
+        loadSettings();
     }, []);
 
-    const handleSave = () => {
+    const handleSave = async () => {
         try {
-            // Save API keys to localStorage
-            localStorage.setItem('geminiApiKey', geminiApiKey);
-            localStorage.setItem('googleApiKey', googleApiKey);
-            localStorage.setItem('googleClientId', googleClientId);
-            localStorage.setItem('googleDriveFolderId', googleDriveFolderId);
-
-            // Save Party B information to localStorage
             const partyBInfo = {
                 companyName,
                 postalCode,
@@ -94,10 +132,27 @@ export default function SettingsPage() {
                 phone,
                 position,
             };
-            localStorage.setItem('partyBInfo', JSON.stringify(partyBInfo));
 
-            // Save Quick Access to localStorage
-            localStorage.setItem('quickAccess', JSON.stringify(selectedQuickAccess));
+            await saveUserSettings({
+                gemini_api_key: geminiApiKey,
+                google_api_key: googleApiKey,
+                google_client_id: googleClientId,
+                google_drive_folder_id: googleDriveFolderId,
+                party_b_info: partyBInfo,
+                quick_access: selectedQuickAccess
+            });
+
+            // Keep localStorage in sync for now? Or clear it? 
+            // Clearing it ensures no confusion, but keeping it is a fallback.
+            // Let's rely on server. But for UX speed, maybe localStorage is good?
+            // No, user specifically asked for separation. LocalStorage is shared across accounts in same browser.
+            // So we should NOT rely on localStorage anymore, or overwrite it with current user data.
+            // But overwriting means another user logging in sees this user's data if we read from it.
+            // So we should Stop writing to localStorage.
+
+            // Clear localStorage to prevent confusion if user switches accounts
+            // actually, we shouldn't wipe it unprompted, but since we migrated, maybe safe.
+            // For now, just don't write to it.
 
             setIsSaved(true);
             setTimeout(() => setIsSaved(false), 3000);

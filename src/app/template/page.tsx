@@ -5,6 +5,9 @@ import Encoding from 'encoding-japanese';
 import BackButton from '@/components/BackButton';
 import Sidebar from '@/components/Sidebar';
 import { extractPartiesFromText } from '@/lib/gemini';
+import { getTemplates, createTemplate, updateTemplate, deleteTemplate, migrateTemplates } from '@/app/actions/templates';
+import { getCompanies } from '@/app/actions/companies';
+import { getUserSettings } from '@/app/actions/settings';
 
 interface SavedTemplate {
     id: string;
@@ -71,121 +74,67 @@ export default function TemplatePage() {
     const [isExtractingParties, setIsExtractingParties] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Load saved templates and settings from localStorage on mount
+    // Load saved templates, settings and companies from server
     useEffect(() => {
-        const saved = localStorage.getItem('savedTemplates');
-        if (saved) {
-            setSavedTemplates(JSON.parse(saved));
-        }
-
-        const savedB = localStorage.getItem('partyBInfo');
-        if (savedB) {
+        const loadData = async () => {
             try {
-                // Try to parse as JSON first
-                const parsed = JSON.parse(savedB);
-                if (parsed && typeof parsed === 'object' && parsed.companyName) {
-                    setSavedPartyBInfo(parsed.companyName);
-
-                    // Construct full address
-                    const parts = [
-                        parsed.postalCode ? `〒${parsed.postalCode}` : '',
-                        parsed.address,
-                        parsed.building
-                    ].filter(Boolean);
-                    setSavedPartyBAddress(parts.join(' '));
-                    setSavedPartyBPresidentPosition(parsed.presidentTitle || '');
-                    setSavedPartyBPresidentName(parsed.presidentName || '');
+                // 1. Load Templates
+                const templatesData = await getTemplates();
+                if (templatesData && templatesData.length > 0) {
+                    setSavedTemplates(templatesData);
                 } else {
-                    // If not an object with companyName, assume it's a plain string
-                    setSavedPartyBInfo(savedB);
+                    // Check localStorage for migration
+                    const saved = localStorage.getItem('savedTemplates');
+                    if (saved) {
+                        try {
+                            const parsed = JSON.parse(saved);
+                            if (Array.isArray(parsed) && parsed.length > 0) {
+                                await migrateTemplates(parsed);
+                                const reloaded = await getTemplates();
+                                setSavedTemplates(reloaded || []);
+                            }
+                        } catch (e) {
+                            console.error('Template migration failed:', e);
+                        }
+                    }
                 }
-            } catch (e) {
-                // If parsing fails, assume it's a plain string
-                setSavedPartyBInfo(savedB);
+
+                // 2. Load User Settings (Party B)
+                const settings = await getUserSettings();
+                if (settings && settings.party_b_info) {
+                    const info = settings.party_b_info;
+                    if (info.companyName) {
+                        setSavedPartyBInfo(info.companyName);
+
+                        // Construct full address
+                        const parts = [
+                            info.postalCode ? `〒${info.postalCode}` : '',
+                            info.address,
+                            info.building
+                        ].filter(Boolean);
+                        setSavedPartyBAddress(parts.join(' '));
+                        setSavedPartyBPresidentPosition(info.presidentTitle || '');
+                        setSavedPartyBPresidentName(info.presidentName || '');
+                    }
+                }
+
+                // 3. Load Companies
+                const companiesData = await getCompanies();
+                if (companiesData && companiesData.length > 0) {
+                    setCompanies(companiesData);
+                } else {
+                    // Fallback to sample data only if needed? 
+                    // Or check localStorage companies migration? 
+                    // Companies page usually handles migration. 
+                    // We can just rely on what getCompanies returns.
+                    // If empty, the dropdown will just be empty.
+                }
+
+            } catch (error) {
+                console.error('Failed to load initial data:', error);
             }
-        }
-
-        // Load companies
-        const savedCompanies = localStorage.getItem('companies');
-        if (savedCompanies) {
-            try {
-                const parsedCompanies: Company[] = JSON.parse(savedCompanies);
-                // Sort alphabetically by name
-                parsedCompanies.sort((a, b) => a.name.localeCompare(b.name, 'ja'));
-                setCompanies(parsedCompanies);
-            } catch (e) {
-                console.error('Failed to parse saved companies', e);
-            }
-        } else {
-            // Initialize with mock data if empty (same as in companies page)
-            const baseCompanies: Company[] = [
-                {
-                    id: 1,
-                    name: '株式会社A',
-                    postalCode: '100-0001',
-                    address: '東京都千代田区千代田1-1',
-                    building: '千代田ビル5F',
-                    presidentTitle: '代表取締役社長',
-                    presidentName: '山田太郎',
-                    contactPerson: '佐藤花子',
-                    email: 'contact@company-a.co.jp',
-                    phone: '03-1234-5678',
-                    position: '営業部長',
-                    contractCount: 3,
-                },
-                {
-                    id: 2,
-                    name: '株式会社B',
-                    postalCode: '150-0001',
-                    address: '東京都渋谷区神宮前1-2-3',
-                    building: null,
-                    presidentTitle: '代表取締役',
-                    presidentName: '鈴木一郎',
-                    contactPerson: '田中次郎',
-                    email: 'info@company-b.jp',
-                    phone: '03-9876-5432',
-                    position: null,
-                    contractCount: 5,
-                },
-                {
-                    id: 3,
-                    name: '合同会社C',
-                    postalCode: '530-0001',
-                    address: '大阪府大阪市北区梅田2-4-9',
-                    building: '梅田ゲートタワー10F',
-                    presidentTitle: '代表社員',
-                    presidentName: '高橋三郎',
-                    contactPerson: '伊藤美咲',
-                    email: 'support@company-c.com',
-                    phone: '06-1111-2222',
-                    position: '総務課長',
-                    contractCount: 2,
-                },
-            ];
-
-            const additionalCompanies: Company[] = Array.from({ length: 100 }, (_, i) => {
-                const id = i + 4;
-                return {
-                    id,
-                    name: `株式会社サンプル${id}`,
-                    postalCode: `100-${String(id).padStart(4, '0')}`,
-                    address: `東京都新宿区西新宿${id}-1-1`,
-                    building: `サンプルビル${id}F`,
-                    presidentTitle: '代表取締役',
-                    presidentName: `サンプル社長${id}`,
-                    contactPerson: `サンプル担当${id}`,
-                    email: `contact${id}@sample.co.jp`,
-                    phone: `03-${String(id).padStart(4, '0')}-0000`,
-                    position: '担当',
-                    contractCount: Math.floor(Math.random() * 10),
-                };
-            });
-
-            const initialCompanies = [...baseCompanies, ...additionalCompanies].sort((a, b) => a.name.localeCompare(b.name, 'ja'));
-
-            setCompanies(initialCompanies);
-            localStorage.setItem('companies', JSON.stringify(initialCompanies));
-        }
+        };
+        loadData();
     }, []);
 
     // Update content whenever originalContent, partyA, partyB, originalPartyA, or originalPartyB changes
@@ -239,7 +188,15 @@ export default function TemplatePage() {
             setIsEditing(true);
 
             // Try to extract party names using Gemini AI
-            const apiKey = localStorage.getItem('geminiApiKey');
+            let apiKey = null;
+            try {
+                const settings = await getUserSettings();
+                apiKey = settings?.gemini_api_key;
+            } catch (e) {
+                console.error('Failed to get settings', e);
+            }
+            // fallback to localStorage for now if not in settings? No, migrate first.
+            if (!apiKey) apiKey = localStorage.getItem('geminiApiKey'); // temporary fallback
 
             if (apiKey) {
                 setIsExtractingParties(true);
@@ -584,60 +541,54 @@ export default function TemplatePage() {
         updateContentWithParties(originalContent, partyA, '', addressA, '', presidentPositionA, presidentNameA, '', '');
     };
 
-    const handleSave = () => {
-        if (editingTemplateId) {
-            // Update existing template
-            const updatedTemplates = savedTemplates.map(t => {
-                if (t.id === editingTemplateId) {
-                    return {
-                        ...t,
-                        name: fileName,
-                        partyA,
-                        partyB,
-                        addressA,
-                        addressB,
-                        presidentPositionA,
-                        presidentNameA,
-                        presidentPositionB,
-                        presidentNameB,
-                        content,
-                        savedAt: new Date().toISOString(),
-                    };
-                }
-                return t;
-            });
-            setSavedTemplates(updatedTemplates);
-            localStorage.setItem('savedTemplates', JSON.stringify(updatedTemplates));
-            alert('テンプレートを更新しました');
-        } else {
-            // Create new template
-            const newTemplate: SavedTemplate = {
-                id: Date.now().toString(),
-                name: fileName || uploadedFile?.name || `契約書_${new Date().toLocaleDateString('ja-JP')}`,
-                partyA,
-                partyB,
-                addressA,
-                addressB,
-                presidentPositionA,
-                presidentNameA,
-                presidentPositionB,
-                presidentNameB,
-                content,
-                savedAt: new Date().toISOString(),
-            };
+    const handleSave = async () => {
+        const templateData = {
+            name: fileName,
+            partyA,
+            partyB,
+            addressA,
+            addressB,
+            presidentPositionA,
+            presidentNameA,
+            presidentPositionB,
+            presidentNameB,
+            content,
+        };
 
-            const updatedTemplates = [...savedTemplates, newTemplate];
-            setSavedTemplates(updatedTemplates);
-            localStorage.setItem('savedTemplates', JSON.stringify(updatedTemplates));
-            alert('契約書を保存しました');
+        try {
+            if (editingTemplateId) {
+                // Update existing template
+                await updateTemplate(editingTemplateId, templateData);
+                alert('テンプレートを更新しました');
+            } else {
+                // Create new template
+                await createTemplate(templateData);
+                alert('契約書を保存しました');
+            }
+
+            // Reload templates
+            const reloaded = await getTemplates();
+            setSavedTemplates(reloaded || []);
+
+        } catch (error) {
+            console.error('Failed to save template:', error);
+            alert('保存に失敗しました');
         }
     };
 
-    const handleDeleteTemplate = (id: string) => {
-        const updatedTemplates = savedTemplates.filter(t => t.id !== id);
-        setSavedTemplates(updatedTemplates);
-        localStorage.setItem('savedTemplates', JSON.stringify(updatedTemplates));
-        setOpenMenuId(null);
+    const handleDeleteTemplate = async (id: string) => {
+        if (confirm('このテンプレートを削除しますか？')) {
+            try {
+                await deleteTemplate(id);
+                // Reload
+                const updatedTemplates = savedTemplates.filter(t => t.id !== id);
+                setSavedTemplates(updatedTemplates);
+                setOpenMenuId(null);
+            } catch (error) {
+                console.error('Failed to delete template:', error);
+                alert('削除に失敗しました');
+            }
+        }
     };
 
     const handleEditTemplate = (template: SavedTemplate) => {

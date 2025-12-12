@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import BackButton from '@/components/BackButton';
 import Sidebar from '@/components/Sidebar';
 import { CONTRACTS, Contract } from '@/data/contracts';
+import { getContracts, deleteContract } from '../actions/contracts';
 
 function ContractsContent() {
     const searchParams = useSearchParams();
@@ -12,16 +13,25 @@ function ContractsContent() {
     const [contracts, setContracts] = useState<Contract[]>([]);
     const [filteredContracts, setFilteredContracts] = useState<Contract[]>([]);
 
-    // Load contracts from localStorage on mount
+    // Load contracts from server on mount
     useEffect(() => {
-        const savedContracts = localStorage.getItem('contracts');
-        if (savedContracts) {
-            setContracts(JSON.parse(savedContracts));
-        } else {
-            // Initialize with static data if empty
-            setContracts(CONTRACTS);
-            localStorage.setItem('contracts', JSON.stringify(CONTRACTS));
-        }
+        const loadContracts = async () => {
+            try {
+                const data = await getContracts();
+                if (data && data.length > 0) {
+                    setContracts(data);
+                } else {
+                    // Start with empty or handle migration if needed.
+                    // For contracts, maybe we don't migrate default static data?
+                    // Just show empty state if no contracts.
+                    // Or if we want to show demo data, we can keep it locally but better not to verify DB.
+                    setContracts([]);
+                }
+            } catch (error) {
+                console.error('Failed to load contracts:', error);
+            }
+        };
+        loadContracts();
     }, []);
 
     useEffect(() => {
@@ -39,20 +49,27 @@ function ContractsContent() {
         window.location.href = `/contracts/${contractId}/edit`;
     };
 
-    const handleDelete = (contractId: number) => {
+    const handleDelete = async (contractId: number) => {
         if (confirm('この契約を削除しますか？')) {
-            const updatedContracts = contracts.filter(c => c.id !== contractId);
-            setContracts(updatedContracts);
-            localStorage.setItem('contracts', JSON.stringify(updatedContracts));
+            try {
+                await deleteContract(contractId);
 
-            // Also update filtered contracts if necessary
-            if (companyFilter) {
-                const updatedFiltered = updatedContracts.filter(c =>
-                    c.partyA === companyFilter || c.partyB === companyFilter
-                );
-                setFilteredContracts(updatedFiltered);
-            } else {
-                setFilteredContracts(updatedContracts);
+                // Update local state
+                const updatedContracts = contracts.filter(c => c.id !== contractId);
+                setContracts(updatedContracts);
+
+                // Also update filtered contracts if necessary
+                if (companyFilter) {
+                    const updatedFiltered = updatedContracts.filter(c =>
+                        c.partyA === companyFilter || c.partyB === companyFilter
+                    );
+                    setFilteredContracts(updatedFiltered);
+                } else {
+                    setFilteredContracts(updatedContracts);
+                }
+            } catch (error) {
+                console.error('Failed to delete contract:', error);
+                alert('契約の削除中にエラーが発生しました。');
             }
         }
     };

@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import BackButton from '@/components/BackButton';
 import { Contract } from '@/data/contracts';
+import { createContract, getContracts } from '@/app/actions/contracts';
+import { getUserSettings } from '@/app/actions/settings';
 
 interface Company {
     id: number;
@@ -41,31 +43,48 @@ export default function NewContractPage() {
     const partyBInputRef = useRef<HTMLInputElement>(null);
 
     // Load companies and saved Party B info from localStorage
+    // Load companies from existing contracts and saved Party B info from settings
     useEffect(() => {
-        const savedCompanies = localStorage.getItem('companies');
-        if (savedCompanies) {
+        const loadInitialData = async () => {
             try {
-                const parsedCompanies: Company[] = JSON.parse(savedCompanies);
-                parsedCompanies.sort((a, b) => a.name.localeCompare(b.name, 'ja'));
-                setCompanies(parsedCompanies);
-            } catch (e) {
-                console.error('Failed to parse saved companies', e);
-            }
-        }
+                // Load contracts to build companies list
+                const contracts = await getContracts();
+                if (contracts) {
+                    const uniqueCompanies = new Set<string>();
+                    contracts.forEach((c: any) => {
+                        if (c.partyA) uniqueCompanies.add(c.partyA);
+                        if (c.partyB) uniqueCompanies.add(c.partyB);
+                    });
 
-        const savedB = localStorage.getItem('partyBInfo');
-        if (savedB) {
-            try {
-                const parsed = JSON.parse(savedB);
-                if (parsed && typeof parsed === 'object' && parsed.companyName) {
-                    setSavedPartyBInfo(parsed.companyName);
-                } else {
-                    setSavedPartyBInfo(savedB);
+                    const companyList: Company[] = Array.from(uniqueCompanies).map((name, index) => ({
+                        id: index,
+                        name: name,
+                        postalCode: '',
+                        address: '',
+                        building: null,
+                        presidentTitle: '',
+                        presidentName: '',
+                        contactPerson: '',
+                        email: '',
+                        phone: '',
+                        position: null,
+                        contractCount: 0
+                    }));
+                    companyList.sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+                    setCompanies(companyList);
                 }
-            } catch (e) {
-                setSavedPartyBInfo(savedB);
+
+                // Load user settings for Party B default
+                const settings = await getUserSettings();
+                if (settings && settings.party_b_info && settings.party_b_info.companyName) {
+                    setSavedPartyBInfo(settings.party_b_info.companyName);
+                }
+            } catch (error) {
+                console.error('Failed to load initial data:', error);
             }
-        }
+        };
+
+        loadInitialData();
     }, []);
 
     // Close suggestions when clicking outside
@@ -102,33 +121,17 @@ export default function NewContractPage() {
         }
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        const savedContracts = localStorage.getItem('contracts');
-        let contracts: Contract[] = [];
-
-        if (savedContracts) {
-            contracts = JSON.parse(savedContracts);
-        } else {
-            // If no saved contracts, import defaults
-            import('@/data/contracts').then(module => {
-                contracts = module.CONTRACTS;
-            });
+        try {
+            await createContract(formData);
+            alert('契約を追加しました');
+            router.push('/contracts');
+        } catch (error) {
+            console.error('Failed to create contract:', error);
+            alert('契約の追加中にエラーが発生しました。');
         }
-
-        // Generate new ID
-        const newId = contracts.length > 0 ? Math.max(...contracts.map(c => c.id)) + 1 : 1;
-
-        const newContract: Contract = {
-            ...formData,
-            id: newId,
-        };
-
-        const updatedContracts = [...contracts, newContract];
-        localStorage.setItem('contracts', JSON.stringify(updatedContracts));
-        alert('契約を追加しました');
-        router.push('/contracts');
     };
 
     const handleCancel = () => {

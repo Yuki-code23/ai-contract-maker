@@ -2,11 +2,61 @@ import { supabase } from './supabase/client'
 
 export interface UserSettings {
     id?: string
-    user_id: string
+    user_email: string
     gemini_api_key?: string
     google_client_id?: string
     google_api_key?: string
     google_drive_folder_id?: string
+    party_b_info?: any // JSONB
+    quick_access?: any // JSONB
+    created_at?: string
+    updated_at?: string
+}
+
+export interface Contract {
+    id: number
+    user_email: string
+    party_a: string
+    party_b: string
+    status: string
+    storage_path?: string
+    auto_renewal: boolean
+    deadline?: string
+    created_at?: string
+    updated_at?: string
+}
+
+export interface Company {
+    id: number
+    user_email: string
+    name: string
+    postal_code?: string
+    address?: string
+    building?: string
+    president_title?: string
+    president_name?: string
+    contact_person?: string
+    email?: string
+    phone?: string
+    position?: string
+    created_at?: string
+    updated_at?: string
+}
+
+export interface Template {
+    id: string
+    user_email: string
+    name: string
+    party_a?: string
+    party_b?: string
+    address_a?: string
+    address_b?: string
+    president_position_a?: string
+    president_name_a?: string
+    president_position_b?: string
+    president_name_b?: string
+    content: string
+    saved_at: string
     created_at?: string
     updated_at?: string
 }

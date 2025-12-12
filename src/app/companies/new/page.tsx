@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import BackButton from '@/components/BackButton';
 import Sidebar from '@/components/Sidebar';
+import { createCompany } from '@/app/actions/companies';
 
 interface Company {
     id: number;
@@ -44,28 +45,17 @@ export default function NewCompanyPage() {
         }));
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        const savedCompanies = localStorage.getItem('companies');
-        let companies: Company[] = [];
-        if (savedCompanies) {
-            companies = JSON.parse(savedCompanies);
+        try {
+            await createCompany(formData);
+            alert('企業を追加しました');
+            router.push('/companies');
+        } catch (error) {
+            console.error('Failed to create company:', error);
+            alert('企業の追加に失敗しました');
         }
-
-        // Generate new ID
-        const newId = companies.length > 0 ? Math.max(...companies.map(c => c.id)) + 1 : 1;
-
-        const newCompany: Company = {
-            ...formData,
-            id: newId,
-            contractCount: 0,
-        };
-
-        const updatedCompanies = [...companies, newCompany];
-        localStorage.setItem('companies', JSON.stringify(updatedCompanies));
-        alert('企業を追加しました');
-        router.push('/companies');
     };
 
     const handleCancel = () => {

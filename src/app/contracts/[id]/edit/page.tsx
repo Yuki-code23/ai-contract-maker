@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import BackButton from '@/components/BackButton';
 import { Contract } from '@/data/contracts';
+import { getContract, updateContract } from '@/app/actions/contracts';
 
 export default function EditContractPage() {
     const router = useRouter();
@@ -22,34 +23,25 @@ export default function EditContractPage() {
     });
 
     useEffect(() => {
-        // Load contracts from localStorage or use default CONTRACTS
-        const savedContracts = localStorage.getItem('contracts');
-        let contracts: Contract[] = [];
+        const loadContract = async () => {
+            if (!contractId) return;
 
-        if (savedContracts) {
-            contracts = JSON.parse(savedContracts);
-        } else {
-            // Import default contracts if needed
-            import('@/data/contracts').then(module => {
-                contracts = module.CONTRACTS;
-                const contract = contracts.find(c => c.id === parseInt(contractId));
+            try {
+                const contract = await getContract(parseInt(contractId));
                 if (contract) {
                     setFormData(contract);
                 } else {
                     alert('契約が見つかりませんでした');
                     router.push('/contracts');
                 }
-            });
-            return;
-        }
+            } catch (error) {
+                console.error('Failed to load contract:', error);
+                alert('契約情報の取得に失敗しました');
+                router.push('/contracts');
+            }
+        };
 
-        const contract = contracts.find(c => c.id === parseInt(contractId));
-        if (contract) {
-            setFormData(contract);
-        } else {
-            alert('契約が見つかりませんでした');
-            router.push('/contracts');
-        }
+        loadContract();
     }, [contractId, router]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -69,34 +61,17 @@ export default function EditContractPage() {
         }
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        const savedContracts = localStorage.getItem('contracts');
-        let contracts: Contract[] = [];
-
-        if (savedContracts) {
-            contracts = JSON.parse(savedContracts);
-        } else {
-            // If no saved contracts, import defaults and add this one
-            import('@/data/contracts').then(module => {
-                contracts = module.CONTRACTS;
-                const updatedContracts = contracts.map(c =>
-                    c.id === formData.id ? formData : c
-                );
-                localStorage.setItem('contracts', JSON.stringify(updatedContracts));
-                alert('契約情報を更新しました');
-                router.push('/contracts');
-            });
-            return;
+        try {
+            await updateContract(formData.id, formData);
+            alert('契約情報を更新しました');
+            router.push('/contracts');
+        } catch (error) {
+            console.error('Failed to update contract:', error);
+            alert('契約情報の更新中にエラーが発生しました。');
         }
-
-        const updatedContracts = contracts.map(c =>
-            c.id === formData.id ? formData : c
-        );
-        localStorage.setItem('contracts', JSON.stringify(updatedContracts));
-        alert('契約情報を更新しました');
-        router.push('/contracts');
     };
 
     const handleCancel = () => {

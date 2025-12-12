@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import BackButton from '@/components/BackButton';
+import { getCompany, updateCompany } from '@/app/actions/companies';
 
 interface Company {
     id: number;
@@ -40,17 +41,24 @@ export default function EditCompanyPage() {
     });
 
     useEffect(() => {
-        const savedCompanies = localStorage.getItem('companies');
-        if (savedCompanies) {
-            const companies: Company[] = JSON.parse(savedCompanies);
-            const company = companies.find(c => c.id === parseInt(companyId));
-            if (company) {
-                setFormData(company);
-            } else {
-                alert('企業が見つかりませんでした');
+        const loadCompany = async () => {
+            if (!companyId) return;
+
+            try {
+                const company = await getCompany(parseInt(companyId));
+                if (company) {
+                    setFormData(company);
+                } else {
+                    alert('企業が見つかりませんでした');
+                    router.push('/companies');
+                }
+            } catch (error) {
+                console.error('Failed to load company:', error);
+                alert('企業情報の取得に失敗しました');
                 router.push('/companies');
             }
-        }
+        };
+        loadCompany();
     }, [companyId, router]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -61,18 +69,16 @@ export default function EditCompanyPage() {
         }));
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        const savedCompanies = localStorage.getItem('companies');
-        if (savedCompanies) {
-            const companies: Company[] = JSON.parse(savedCompanies);
-            const updatedCompanies = companies.map(c =>
-                c.id === formData.id ? formData : c
-            );
-            localStorage.setItem('companies', JSON.stringify(updatedCompanies));
+        try {
+            await updateCompany(formData.id, formData);
             alert('企業情報を更新しました');
             router.push('/companies');
+        } catch (error) {
+            console.error('Failed to update company:', error);
+            alert('企業情報の更新に失敗しました');
         }
     };
 

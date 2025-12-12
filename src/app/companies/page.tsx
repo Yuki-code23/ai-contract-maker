@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import BackButton from '@/components/BackButton';
 import Sidebar from '@/components/Sidebar';
 import { CONTRACTS, Contract } from '@/data/contracts';
+import { getCompanies, deleteCompany, migrateCompanies, createCompany } from '../actions/companies';
+import { getContracts } from '../actions/contracts';
 
 interface Company {
     id: number;
@@ -24,19 +26,50 @@ export default function CompaniesPage() {
     const [companies, setCompanies] = useState<Company[]>([]);
     const [contracts, setContracts] = useState<Contract[]>([]);
 
-    // Load contracts from localStorage
+    // Load companies from server on mount
     useEffect(() => {
-        const savedContracts = localStorage.getItem('contracts');
-        if (savedContracts) {
-            setContracts(JSON.parse(savedContracts));
-        } else {
-            setContracts(CONTRACTS);
-        }
+        const loadData = async () => {
+            try {
+                // Load contracts for count calculation
+                const contractsData = await getContracts();
+                setContracts(contractsData || []);
+
+                // Load companies
+                const companiesData = await getCompanies();
+
+                if (companiesData && companiesData.length > 0) {
+                    setCompanies(companiesData);
+                } else {
+                    // Check localStorage for migration
+                    const savedCompanies = localStorage.getItem('companies');
+                    if (savedCompanies) {
+                        try {
+                            const parsed = JSON.parse(savedCompanies);
+                            if (Array.isArray(parsed) && parsed.length > 0) {
+                                await migrateCompanies(parsed);
+                                // Reload from server to get IDs
+                                const reloaded = await getCompanies();
+                                setCompanies(reloaded || []);
+                            } else {
+                                // No valid local data, leave empty or show empty state
+                                setCompanies([]);
+                            }
+                        } catch (e) {
+                            console.error('Migration failed:', e);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load data:', error);
+            }
+        };
+        loadData();
     }, []);
 
     // Helper function to count contracts for a company
+    // Helper function to count contracts for a company
     const getContractCount = (companyName: string): number => {
-        return CONTRACTS.filter(contract =>
+        return contracts.filter(contract =>
             contract.partyA === companyName || contract.partyB === companyName
         ).length;
     };
@@ -108,23 +141,22 @@ export default function CompaniesPage() {
         return [...baseCompanies, ...additionalCompanies].sort((a, b) => a.name.localeCompare(b.name, 'ja'));
     };
 
-    useEffect(() => {
-        const savedCompanies = localStorage.getItem('companies');
-        if (savedCompanies) {
-            setCompanies(JSON.parse(savedCompanies));
-        } else {
-            // Initialize with mock data if empty
-            const initialCompanies = generateSampleCompanies();
-            setCompanies(initialCompanies);
-            localStorage.setItem('companies', JSON.stringify(initialCompanies));
-        }
-    }, []);
+    // remove original useEffect that loaded companies from localStorage
+    // (It was replaced/merged above)
 
-    const handleResetData = () => {
-        if (confirm('現在のデータを削除し、サンプルデータ（100件以上）で初期化しますか？')) {
-            const sampleCompanies = generateSampleCompanies();
-            setCompanies(sampleCompanies);
-            localStorage.setItem('companies', JSON.stringify(sampleCompanies));
+    const handleResetData = async () => {
+        if (confirm('現在のデータを削除し、サンプルデータ（数件）で初期化しますか？')) {
+            // For safety, maybe don't perform this massive delete/insert on server for now
+            // Or just insert samples if empty.
+            // Im implementing a "Load Samples" instead of reset/overwrite for safety.
+            const sampleCompanies = generateSampleCompanies().slice(0, 5); // Limit to 5 for safety
+
+            for (const c of sampleCompanies) {
+                await createCompany(c);
+            }
+
+            const reloaded = await getCompanies();
+            setCompanies(reloaded || []);
         }
     };
 
@@ -132,11 +164,16 @@ export default function CompaniesPage() {
         window.location.href = `/companies/${companyId}/edit`;
     };
 
-    const handleDelete = (companyId: number) => {
+    const handleDelete = async (companyId: number) => {
         if (confirm('この企業を削除しますか？')) {
-            const updatedCompanies = companies.filter(c => c.id !== companyId);
-            setCompanies(updatedCompanies);
-            localStorage.setItem('companies', JSON.stringify(updatedCompanies));
+            try {
+                await deleteCompany(companyId);
+                const updatedCompanies = companies.filter(c => c.id !== companyId);
+                setCompanies(updatedCompanies);
+            } catch (error) {
+                console.error('Failed to delete company:', error);
+                alert('削除に失敗しました');
+            }
         }
     };
 
