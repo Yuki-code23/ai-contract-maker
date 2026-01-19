@@ -10,206 +10,248 @@ export async function generateInvoicePDF(
     bankInfo?: BankInfo,
     sealImageBytes?: ArrayBuffer
 ) {
-    const pdfDoc = await PDFDocument.create();
-    pdfDoc.registerFontkit(fontkit);
+    try {
+        console.log('CRITICAL: PDF Generation Started', { billingId: billing.id });
+        const pdfDoc = await PDFDocument.create();
 
-    const fontBytes = await fetch(FONT_URL).then((res) => res.arrayBuffer());
-    const font = await pdfDoc.embedFont(fontBytes);
-
-    const page = pdfDoc.addPage();
-    const { width, height } = page.getSize();
-
-    // Helper
-    const drawText = (text: string, x: number, y: number, size: number = 10, align: 'left' | 'right' | 'center' = 'left', color = rgb(0, 0, 0)) => {
-        const textWidth = font.widthOfTextAtSize(text, size);
-        let xPos = x;
-        if (align === 'right') xPos = x - textWidth;
-        if (align === 'center') xPos = x - textWidth / 2;
-
-        page.drawText(text, { x: xPos, y, size, font, color });
-        return textWidth;
-    };
-
-    // --- Header ---
-    drawText('請求書', width / 2, height - 50, 24, 'center');
-
-    // Right Column: Sender Info / Date / Invoice#
-    const rightX = width - 50;
-    let currentY = height - 50;
-
-    const issueDate = billing.issue_date ? new Date(billing.issue_date).toLocaleDateString('ja-JP') : new Date().toLocaleDateString('ja-JP');
-    drawText(issueDate, rightX, currentY, 10, 'right');
-    currentY -= 15;
-    drawText(`請求番号: ${billing.invoice_number || '-'}`, rightX, currentY, 10, 'right');
-    currentY -= 20;
-
-    // Sender Profile
-    if (senderProfile) {
-        drawText(senderProfile.name, rightX, currentY, 12, 'right'); // Bold-ish?
-        currentY -= 15;
-        if (senderProfile.registration_number) {
-            drawText(`登録番号: ${senderProfile.registration_number}`, rightX, currentY, 10, 'right');
-            currentY -= 15;
-        }
-        drawText(senderProfile.address, rightX, currentY, 9, 'right');
-        currentY -= 12;
-        if (senderProfile.phone) {
-            drawText(`TEL: ${senderProfile.phone}`, rightX, currentY, 9, 'right');
-            currentY -= 12;
-        }
-        if (senderProfile.email) {
-            drawText(`Email: ${senderProfile.email}`, rightX, currentY, 9, 'right');
-            currentY -= 12;
-        }
-    } else {
-        // Fallback
-        drawText('株式会社（未設定）', rightX, currentY, 12, 'right');
-        currentY -= 15;
-    }
-
-    // Seal Image
-    if (sealImageBytes) {
+        // Ensure fontkit is registered correctly
         try {
-            const sealImage = await pdfDoc.embedPng(sealImageBytes);
-            const sealDim = 50;
-            // Position near sender name
-            page.drawImage(sealImage, {
-                x: rightX - 50, // adjusting position overlap
-                y: height - 120, // rough guess
-                width: sealDim,
-                height: sealDim,
-            });
+            console.log('Registering Fontkit...');
+            pdfDoc.registerFontkit(fontkit as any);
         } catch (e) {
-            console.error('Failed to embed seal image', e);
+            console.warn('Fontkit registration warning:', e);
         }
+
+        console.log('Fetching Font...');
+        let fontBytes: ArrayBuffer | null = null;
+
+        // Dynamic detection of window origin for local fallback
+        const localOrigin = typeof window !== 'undefined' ? window.location.origin : '';
+
+        const fontUrls = [
+            `${localOrigin}/fonts/NotoSansJP-Regular.otf`,
+            'https://cdn.jsdelivr.net/gh/notofonts/noto-cjk@main/Sans/SubsetOTF/JP/NotoSansJP-Regular.otf',
+            'https://raw.githubusercontent.com/google/fonts/main/ofl/notosansjp/static/NotoSansJP-Regular.ttf',
+            'https://fonts.gstatic.com/s/notosansjp/v52/-Ky47oWBlWRoTMXNEFsSjY_H.ttf',
+            FONT_URL
+        ];
+
+        for (const url of fontUrls) {
+            if (!url) continue;
+            try {
+                console.log('Trying font URL:', url);
+                const response = await fetch(url, { cache: 'force-cache' });
+                if (response.ok) {
+                    const bytes = await response.arrayBuffer();
+                    if (bytes && bytes.byteLength > 10000) { // OTF is large, tiny bytes means error
+                        fontBytes = bytes;
+                        console.log('Successfully fetched font. Size:', fontBytes.byteLength);
+                        break;
+                    }
+                }
+            } catch (e) {
+                console.warn(`Failed to fetch font from ${url}:`, e);
+            }
+        }
+
+        let font: any;
+        if (fontBytes && fontBytes.byteLength > 0) {
+            try {
+                console.log('Embedding Font...');
+                font = await pdfDoc.embedFont(fontBytes);
+                console.log('Font embedded successfully.');
+            } catch (e: any) {
+                console.error('Font embedding failed:', e);
+            }
+        }
+
+        if (!font) {
+            console.warn('Falling back to Standard Fonts (Helvetica). Japanese text will be missing.');
+            font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+        }
+
+        const page = pdfDoc.addPage();
+        const { width, height } = page.getSize();
+        console.log('Page size:', width, 'x', height);
+
+        // Helper with extreme safety
+        const drawText = (text: any, x: number, y: number, size: number = 10, align: 'left' | 'right' | 'center' = 'left', color = rgb(0, 0, 0)) => {
+            try {
+                const safeText = String(text || '');
+                if (!safeText) return 0;
+
+                const textWidth = font.widthOfTextAtSize(safeText, size);
+                let xPos = x;
+                if (align === 'right') xPos = x - textWidth;
+                if (align === 'center') xPos = x - textWidth / 2;
+
+                page.drawText(safeText, { x: xPos, y, size, font, color });
+                return textWidth;
+            } catch (e) {
+                console.error('drawText internal failure:', text, e);
+                return 0;
+            }
+        };
+
+        // --- Header ---
+        try {
+            drawText('請求書', width / 2, height - 50, 24, 'center');
+        } catch (e) { console.error('Error drawing header:', e); }
+
+        // Right Column: Sender Info
+        const rightX = width - 50;
+        let currentY = height - 50;
+
+        try {
+            const issueDate = billing.issue_date ? new Date(billing.issue_date).toLocaleDateString('ja-JP') : new Date().toLocaleDateString('ja-JP');
+            drawText(issueDate, rightX, currentY, 10, 'right');
+            currentY -= 15;
+            drawText(`請求番号: ${billing.invoice_number || '-'}`, rightX, currentY, 10, 'right');
+            currentY -= 20;
+
+            if (senderProfile) {
+                drawText(senderProfile.name || '', rightX, currentY, 12, 'right');
+                currentY -= 15;
+                if (senderProfile.registration_number) {
+                    drawText(`登録番号: ${senderProfile.registration_number}`, rightX, currentY, 10, 'right');
+                    currentY -= 15;
+                }
+                drawText(senderProfile.address || '', rightX, currentY, 9, 'right');
+                currentY -= 12;
+            } else {
+                drawText('（自社名未設定）', rightX, currentY, 12, 'right');
+                currentY -= 15;
+            }
+        } catch (e) { console.error('Error drawing sender section:', e); }
+
+        // Seal Image
+        if (sealImageBytes && sealImageBytes.byteLength > 0) {
+            try {
+                console.log('Processing seal image, bytes:', sealImageBytes.byteLength);
+                let sealImage;
+                try {
+                    sealImage = await pdfDoc.embedPng(sealImageBytes);
+                } catch (pngError) {
+                    console.log('Seal: not PNG, trying JPG...');
+                    sealImage = await pdfDoc.embedJpg(sealImageBytes);
+                }
+
+                const sealDim = 50;
+                page.drawImage(sealImage, {
+                    x: rightX - 60,
+                    y: height - 130,
+                    width: sealDim,
+                    height: sealDim,
+                });
+                console.log('Seal image embedded.');
+            } catch (e) {
+                console.error('Non-fatal: Seal embedding failed:', e);
+            }
+        }
+
+        // Left Column: Recipient
+        try {
+            const leftX = 50;
+            const recipientName = (billing.client_info as any)?.name || billing.contractPartyB || '御中';
+            drawText(`${recipientName}  御中`, leftX, height - 80, 16, 'left');
+
+            const totalBoxY = height - 160;
+            drawText('下記の通りご請求申し上げます。', leftX, totalBoxY + 30, 10, 'left');
+
+            const subtotalVal = Number(billing.subtotal || billing.amount || 0);
+            const taxTotalsVal = (billing.tax_total as any) || { tax8: 0, tax10: 0 };
+            if (!billing.tax_total && billing.amount) {
+                taxTotalsVal.tax10 = Math.floor(subtotalVal * 0.1);
+            }
+            const billingTotal = Number(billing.total || (subtotalVal + Number(taxTotalsVal.tax8 || 0) + Number(taxTotalsVal.tax10 || 0)));
+
+            const totalText = `ご請求金額   ¥${billingTotal.toLocaleString()} -`;
+            drawText(totalText, leftX + 10, totalBoxY, 18, 'left');
+            page.drawLine({
+                start: { x: leftX, y: totalBoxY - 5 },
+                end: { x: width / 2, y: totalBoxY - 5 },
+                thickness: 1,
+                color: rgb(0, 0, 0),
+            });
+
+            drawText(`お支払期限: ${billing.payment_deadline ? new Date(billing.payment_deadline).toLocaleDateString('ja-JP') : '-'}`, leftX, totalBoxY - 25, 10, 'left');
+
+            // Table
+            const tableTop = totalBoxY - 60;
+            const colX = { desc: 50, qty: 320, unit: 360, price: 430, amount: 500 };
+
+            page.drawRectangle({ x: 40, y: tableTop - 15, width: width - 80, height: 20, color: rgb(0.95, 0.95, 0.95) });
+            drawText('品名', colX.desc, tableTop - 10, 10, 'left');
+            drawText('数量', colX.qty, tableTop - 10, 10, 'right');
+            drawText('単位', colX.unit, tableTop - 10, 10, 'center');
+            drawText('単価', colX.price, tableTop - 10, 10, 'right');
+            drawText('金額', colX.amount, tableTop - 10, 10, 'right');
+
+            page.drawLine({ start: { x: 40, y: tableTop - 15 }, end: { x: width - 40, y: tableTop - 15 }, thickness: 1 });
+
+            let yPos = tableTop - 35;
+            const itemsList = billing.items || [];
+
+            if (itemsList.length === 0 && subtotalVal > 0) {
+                drawText('ご請求費用', colX.desc, yPos, 10, 'left');
+                drawText('1', colX.qty, yPos, 10, 'right');
+                drawText('式', colX.unit, yPos, 10, 'center');
+                drawText(subtotalVal.toLocaleString(), colX.price, yPos, 10, 'right');
+                drawText(subtotalVal.toLocaleString(), colX.amount, yPos, 10, 'right');
+                yPos -= 25;
+            } else {
+                itemsList.forEach(item => {
+                    const rowAmount = (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0);
+                    drawText(item.description || '', colX.desc, yPos, 10, 'left');
+                    drawText((item.quantity || 0).toString(), colX.qty, yPos, 10, 'right');
+                    drawText(item.unit || '', colX.unit, yPos, 10, 'center');
+                    drawText((item.unitPrice || 0).toLocaleString(), colX.price, yPos, 10, 'right');
+                    drawText(rowAmount.toLocaleString(), colX.amount, yPos, 10, 'right');
+                    yPos -= 25;
+                });
+            }
+
+            // Summary Bottom
+            yPos -= 10;
+            drawText('小計', 350, yPos, 10, 'left');
+            drawText(`¥${subtotalVal.toLocaleString()}`, 500, yPos, 10, 'right');
+            yPos -= 15;
+            if (Number(taxTotalsVal.tax10 || 0) > 0) {
+                drawText('消費税 (10%)', 350, yPos, 10, 'left');
+                drawText(`¥${Number(taxTotalsVal.tax10).toLocaleString()}`, 500, yPos, 10, 'right');
+                yPos -= 15;
+            }
+            if (Number(taxTotalsVal.tax8 || 0) > 0) {
+                drawText('消費税 (軽減8%)', 350, yPos, 10, 'left');
+                drawText(`¥${Number(taxTotalsVal.tax8).toLocaleString()}`, 500, yPos, 10, 'right');
+                yPos -= 15;
+            }
+            page.drawLine({ start: { x: 350, y: yPos + 5 }, end: { x: width - 40, y: yPos + 5 }, thickness: 1 });
+            yPos -= 5;
+            drawText('合計', 350, yPos, 12, 'left');
+            drawText(`¥${billingTotal.toLocaleString()}`, 500, yPos, 12, 'right');
+
+            // Bank
+            if (bankInfo) {
+                const bankY = tableTop - 350;
+                drawText('【お振込先】', 50, bankY, 10, 'left');
+                drawText(`${bankInfo.bank_name || ''} ${bankInfo.branch_name || ''}`, 50, bankY - 15, 10, 'left');
+                drawText(`${bankInfo.account_number || ''}  ${bankInfo.account_holder || ''}`, 50, bankY - 30, 10, 'left');
+            }
+        } catch (e) { console.error('Error drawing main content:', e); }
+
+        console.log('Saving PDF...');
+        const pdfBytes = await pdfDoc.save();
+        const blob = new Blob([pdfBytes as any], { type: 'application/pdf' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `invoice_${billing.invoice_number || billing.id}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        console.log('PDF Download Triggered');
+    } catch (error: any) {
+        console.error('FATAL: PDF Generation Failed', error);
+        throw new Error(`PDF生成中に致命的なエラーが発生しました: ${error.message}`);
     }
-
-    // Left Column: Recipient
-    const leftX = 50;
-    const recipientName = (billing.client_info as any)?.name || billing.contractPartyB || '御中';
-    drawText(`${recipientName}  御中`, leftX, height - 80, 16, 'left');
-
-    // Subject / Total Box
-    const totalBoxY = height - 160;
-    drawText('下記の通りご請求申し上げます。', leftX, totalBoxY + 30, 10, 'left');
-
-    const total = billing.total || billing.amount || 0;
-
-    // Underline for Total
-    const totalText = `ご請求金額   ¥${total.toLocaleString()} -`;
-    drawText(totalText, leftX + 10, totalBoxY, 18, 'left');
-    page.drawLine({
-        start: { x: leftX, y: totalBoxY - 5 },
-        end: { x: width / 2, y: totalBoxY - 5 },
-        thickness: 1,
-        color: rgb(0, 0, 0),
-    });
-
-    drawText(`お支払期限: ${billing.payment_deadline ? new Date(billing.payment_deadline).toLocaleDateString('ja-JP') : '-'}`, leftX, totalBoxY - 25, 10, 'left');
-
-
-    // --- Details Table ---
-    const tableTop = totalBoxY - 60;
-    const colX = {
-        desc: 50,
-        qty: 320,
-        unit: 360,
-        price: 430,
-        amount: 500
-    };
-
-    // Table Header
-    page.drawRectangle({ x: 40, y: tableTop - 15, width: width - 80, height: 20, color: rgb(0.95, 0.95, 0.95) });
-    drawText('品名', colX.desc, tableTop - 10, 10, 'left');
-    drawText('数量', colX.qty, tableTop - 10, 10, 'right');
-    drawText('単位', colX.unit, tableTop - 10, 10, 'center');
-    drawText('単価', colX.price, tableTop - 10, 10, 'right');
-    drawText('金額', colX.amount, tableTop - 10, 10, 'right');
-
-    page.drawLine({ start: { x: 40, y: tableTop - 15 }, end: { x: width - 40, y: tableTop - 15 }, thickness: 1 });
-
-    // Rows
-    let y = tableTop - 35;
-    const items = billing.items || [];
-
-    if (items.length === 0 && billing.amount) {
-        // Fallback for old data
-        drawText('システム開発費用', colX.desc, y, 10, 'left');
-        drawText('1', colX.qty, y, 10, 'right');
-        drawText('式', colX.unit, y, 10, 'center');
-        drawText(billing.amount.toLocaleString(), colX.price, y, 10, 'right');
-        drawText(billing.amount.toLocaleString(), colX.amount, y, 10, 'right');
-        y -= 20;
-    } else {
-        items.forEach(item => {
-            const amount = item.quantity * item.unitPrice;
-            drawText(item.description, colX.desc, y, 10, 'left');
-            drawText(item.quantity.toString(), colX.qty, y, 10, 'right');
-            drawText(item.unit, colX.unit, y, 10, 'center');
-            drawText(item.unitPrice.toLocaleString(), colX.price, y, 10, 'right');
-            drawText(amount.toLocaleString(), colX.amount, y, 10, 'right');
-
-            // Tax indicator? (e.g. *)
-            if (item.taxRate === 8) drawText('※', colX.desc - 10, y, 8, 'left');
-
-            page.drawLine({ start: { x: 40, y: y - 5 }, end: { x: width - 40, y: y - 5 }, thickness: 0.5, color: rgb(0.9, 0.9, 0.9) });
-            y -= 25;
-        });
-    }
-
-    // --- Calculation Summary (Bottom Right) ---
-    y -= 10;
-    const summaryLabelX = 350;
-    const summaryValX = 500;
-
-    const subtotal = billing.subtotal || billing.amount || 0;
-    const taxTotals = billing.tax_total || { tax8: 0, tax10: 0 };
-
-    // Old data compat
-    if (!billing.tax_total && billing.amount) {
-        taxTotals.tax10 = Math.floor(billing.amount * 0.1);
-    }
-
-    drawText('小計', summaryLabelX, y, 10, 'left');
-    drawText(`¥${subtotal.toLocaleString()}`, summaryValX, y, 10, 'right');
-    y -= 15;
-
-    if (taxTotals.tax10 > 0) {
-        drawText('消費税 (10%)', summaryLabelX, y, 10, 'left');
-        drawText(`¥${taxTotals.tax10.toLocaleString()}`, summaryValX, y, 10, 'right');
-        y -= 15;
-    }
-    if (taxTotals.tax8 > 0) {
-        drawText('消費税 (軽減8%)', summaryLabelX, y, 10, 'left');
-        drawText(`¥${taxTotals.tax8.toLocaleString()}`, summaryValX, y, 10, 'right');
-        y -= 15;
-    }
-
-    page.drawLine({ start: { x: summaryLabelX, y: y + 5 }, end: { x: width - 40, y: y + 5 }, thickness: 1 });
-    y -= 5;
-
-    drawText('合計', summaryLabelX, y, 12, 'left', rgb(0, 0, 0));
-    drawText(`¥${total.toLocaleString()}`, summaryValX, y, 12, 'right', rgb(0, 0, 0));
-
-
-    // --- Bank Info (Bottom Left) ---
-    if (bankInfo) {
-        const bankY = tableTop - 250; // approximate
-        const bankX = 50;
-
-        drawText('【お振込先】', bankX, bankY, 10, 'left');
-        drawText(`${bankInfo.bank_name} ${bankInfo.branch_name}`, bankX, bankY - 15, 10, 'left');
-        drawText(`${bankInfo.account_number}  ${bankInfo.account_holder}`, bankX, bankY - 30, 10, 'left');
-        drawText('※振込手数料は貴社にてご負担願います。', bankX, bankY - 50, 8, 'left');
-    }
-
-    // Save
-    const pdfBytes = await pdfDoc.save();
-    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `invoice_${billing.invoice_number || billing.id}.pdf`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
 }

@@ -20,7 +20,16 @@ export default function BillingDetailPage({ params }: { params: { id: string } }
     useEffect(() => {
         const loadData = async () => {
             try {
-                const billingData = await getBilling(parseInt(params.id));
+                const billingId = parseInt(params.id);
+                if (isNaN(billingId)) {
+                    throw new Error("Invalid billing ID: " + params.id);
+                }
+
+                const billingData = await getBilling(billingId);
+                if (!billingData) {
+                    throw new Error("請求データが見つかりませんでした (ID: " + billingId + ")");
+                }
+
                 setBilling(billingData);
 
                 // Load settings for PDF generation
@@ -29,9 +38,9 @@ export default function BillingDetailPage({ params }: { params: { id: string } }
                     setSenderProfile(settings.company_profile);
                     setBankInfo(settings.bank_info);
                 }
-            } catch (error) {
+            } catch (error: any) {
                 console.error('Failed to load data:', error);
-                alert('データ読み込みに失敗しました');
+                alert('データ読み込みに失敗しました: ' + (error.message || 'Unknown error'));
                 router.push('/billings');
             } finally {
                 setLoading(false);
@@ -56,12 +65,26 @@ export default function BillingDetailPage({ params }: { params: { id: string } }
         if (!billing) return;
         setGeneratingPdf(true);
         try {
-            // Need to fetch seal image if exists?
-            // For now pass undefined for seal/image
-            await generateInvoicePDF(billing, senderProfile, bankInfo);
-        } catch (error) {
-            console.error('Failed to generate PDF:', error);
-            alert('PDF生成に失敗しました');
+            let sealBytes: ArrayBuffer | undefined = undefined;
+
+            // Re-fetch settings or use from state to get seal_url
+            const settings = await getUserSettings();
+            if (settings?.seal_url) {
+                try {
+                    const res = await fetch(settings.seal_url);
+                    if (res.ok) {
+                        sealBytes = await res.arrayBuffer();
+                    }
+                } catch (e) {
+                    console.error('Failed to fetch seal image:', e);
+                }
+            }
+
+            await generateInvoicePDF(billing, senderProfile, bankInfo, sealBytes);
+        } catch (error: any) {
+            console.error('CRITICAL: PDF Generation Error:', error);
+            const detail = error instanceof Error ? error.message : String(error);
+            alert(`PDF生成エラーが発生しました。\n詳細: ${detail}\n\n※ブラウザの開発者ツール(F12)のコンソールに詳細なログが出力されています。内容を教えていただければ修正可能です。`);
         } finally {
             setGeneratingPdf(false);
         }
@@ -94,6 +117,17 @@ export default function BillingDetailPage({ params }: { params: { id: string } }
 
                 <main className="flex-1 overflow-y-auto p-8">
                     <div className="max-w-4xl mx-auto space-y-6">
+                        {/* Status Explanations */}
+                        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4 rounded-lg text-sm">
+                            <h3 className="font-bold text-blue-800 dark:text-blue-300 mb-2">請求ステータスの定義</h3>
+                            <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1 text-blue-700 dark:text-blue-400">
+                                <li><strong>Planned (予定)</strong>: 請求の準備段階です。</li>
+                                <li><strong>Approved (承認済)</strong>: 内容が確定し、送付可能な状態です。</li>
+                                <li><strong>Sent (送付済)</strong>: 顧客へ請求書を送付した状態です。</li>
+                                <li><strong>Paid (入金済)</strong>: 入金が確認され、完了した状態です。</li>
+                            </ul>
+                        </div>
+
                         {/* Status Card */}
                         <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 flex justify-between items-center">
                             <div>
@@ -107,16 +141,23 @@ export default function BillingDetailPage({ params }: { params: { id: string } }
                                     )}
                                 </div>
                             </div>
-                            <div className="flex gap-2">
-                                {billing.status === 'Planned' && (
-                                    <button onClick={() => handleStatusChange('Approved')} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">承認する</button>
-                                )}
-                                {billing.status === 'Approved' && (
-                                    <button onClick={() => handleStatusChange('Sent')} className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors">送付済みにする</button>
-                                )}
-                                {(billing.status === 'Sent' || billing.status === 'Approved') && (
-                                    <button onClick={() => handleStatusChange('Paid')} className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors">入金確認済み</button>
-                                )}
+                            <div className="flex items-center gap-3">
+                                <label className="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">ステータスを変更:</label>
+                                <select
+                                    value={billing.status}
+                                    onChange={(e) => {
+                                        const newStatus = e.target.value as Billing['status'];
+                                        if (confirm(`${newStatus} に変更しますか？`)) {
+                                            handleStatusChange(newStatus);
+                                        }
+                                    }}
+                                    className="p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none"
+                                >
+                                    <option value="Planned">Planned (予定)</option>
+                                    <option value="Approved">Approved (承認済)</option>
+                                    <option value="Sent">Sent (送付済)</option>
+                                    <option value="Paid">Paid (入金済)</option>
+                                </select>
                             </div>
                         </div>
 

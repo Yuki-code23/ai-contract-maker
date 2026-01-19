@@ -45,20 +45,25 @@ export async function getBilling(id: number) {
             *,
             contracts (
                 party_a,
-                party_b,
-                metadata
+                party_b
             )
         `)
         .eq('id', id)
         .eq('user_email', session.user.email)
-        .single()
+        .maybeSingle()
 
     if (error) {
-        console.error('Error fetching billing:', error)
-        throw new Error("Failed to fetch billing")
+        console.error(`Error fetching billing (id: ${id}):`, error)
+        throw new Error("Failed to fetch billing: " + error.message)
     }
 
-    return data
+    if (!data) return null
+
+    return {
+        ...data,
+        contractPartyA: data.contracts?.party_a,
+        contractPartyB: data.contracts?.party_b
+    }
 }
 
 export async function updateBillingStatus(id: number, status: Billing['status']) {
