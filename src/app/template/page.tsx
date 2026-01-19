@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Encoding from 'encoding-japanese';
 import BackButton from '@/components/BackButton';
 import Sidebar from '@/components/Sidebar';
@@ -41,6 +42,7 @@ interface Company {
 }
 
 export default function TemplatePage() {
+    const router = useRouter();
     const [uploadedFile, setUploadedFile] = useState<File | null>(null);
     const [fileName, setFileName] = useState(''); // State for editable file name
     const [content, setContent] = useState('');
@@ -72,6 +74,7 @@ export default function TemplatePage() {
     const [selectedTemplate, setSelectedTemplate] = useState<SavedTemplate | null>(null);
     const [companies, setCompanies] = useState<Company[]>([]); // Store companies loaded from localStorage
     const [showPartyASuggestions, setShowPartyASuggestions] = useState(false); // Toggle for Party A suggestions dropdown
+    const [showPartyBSuggestions, setShowPartyBSuggestions] = useState(false); // Toggle for Party B suggestions dropdown
     const [openMenuId, setOpenMenuId] = useState<string | null>(null);
     const [isExtractingParties, setIsExtractingParties] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -548,6 +551,38 @@ export default function TemplatePage() {
         }
     };
 
+    const handleSelectCompanyForPartyB = (company: Company) => {
+        setPartyB(company.name);
+
+        const parts = [
+            company.postalCode ? `〒${company.postalCode}` : '',
+            company.address,
+            company.building
+        ].filter(Boolean);
+        const newAddressB = parts.join(' ');
+        setAddressB(newAddressB);
+
+        const newPresidentPositionB = company.presidentTitle;
+        setPresidentPositionB(newPresidentPositionB);
+
+        const newPresidentNameB = company.presidentName;
+        setPresidentNameB(newPresidentNameB);
+
+        setShowPartyBSuggestions(false);
+
+        updateContentWithParties(
+            originalContent,
+            partyA,
+            company.name,
+            addressA,
+            newAddressB,
+            presidentPositionA,
+            presidentNameA,
+            newPresidentPositionB,
+            newPresidentNameB
+        );
+    };
+
     const handleSelectCompanyForPartyA = (company: Company) => {
         setPartyA(company.name);
 
@@ -725,6 +760,23 @@ export default function TemplatePage() {
             a.click();
             URL.revokeObjectURL(url);
         }
+    };
+
+    const handleDownloadAndCreateContract = async () => {
+        await handleDownload();
+
+        // Construct query parameters
+        const params = new URLSearchParams();
+        if (partyA) params.set('partyA', partyA);
+        if (partyB) params.set('partyB', partyB);
+
+        // Remove extension from title for the contract list
+        let cleanTitle = fileName || '契約書';
+        if (cleanTitle.endsWith('.docx')) cleanTitle = cleanTitle.slice(0, -5);
+        else if (cleanTitle.endsWith('.txt')) cleanTitle = cleanTitle.slice(0, -4);
+        params.set('title', cleanTitle);
+
+        router.push(`/contracts/new?${params.toString()}`);
     };
 
     return (
@@ -1002,25 +1054,38 @@ export default function TemplatePage() {
                                             placeholder="甲の名前を入力"
                                             className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
                                         />
-                                        {showPartyASuggestions && companies.length > 0 && (
+                                        {showPartyASuggestions && (
                                             <>
                                                 <div
                                                     className="fixed inset-0 z-10"
                                                     onClick={() => setShowPartyASuggestions(false)}
                                                 ></div>
                                                 <div className="absolute z-20 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-y-auto">
-                                                    {companies.map((company) => (
-                                                        <button
-                                                            key={company.id}
-                                                            onClick={() => handleSelectCompanyForPartyA(company)}
-                                                            className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex flex-col"
-                                                        >
-                                                            <span className="font-medium">{company.name}</span>
-                                                            <span className="text-xs text-gray-500 dark:text-gray-400">
-                                                                {company.presidentTitle} {company.presidentName}
-                                                            </span>
-                                                        </button>
-                                                    ))}
+                                                    {companies
+                                                        .filter(company =>
+                                                            company.name.toLowerCase().includes(partyA.toLowerCase()) ||
+                                                            (company.presidentName && company.presidentName.toLowerCase().includes(partyA.toLowerCase()))
+                                                        )
+                                                        .map((company) => (
+                                                            <button
+                                                                key={company.id}
+                                                                onClick={() => handleSelectCompanyForPartyA(company)}
+                                                                className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex flex-col"
+                                                            >
+                                                                <span className="font-medium">{company.name}</span>
+                                                                <span className="text-xs text-gray-500 dark:text-gray-400">
+                                                                    {company.presidentTitle} {company.presidentName}
+                                                                </span>
+                                                            </button>
+                                                        ))}
+                                                    {companies.filter(company =>
+                                                        company.name.toLowerCase().includes(partyA.toLowerCase()) ||
+                                                        (company.presidentName && company.presidentName.toLowerCase().includes(partyA.toLowerCase()))
+                                                    ).length === 0 && (
+                                                            <div className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
+                                                                一致する企業が見つかりません
+                                                            </div>
+                                                        )}
                                                 </div>
                                             </>
                                         )}
@@ -1109,9 +1174,45 @@ export default function TemplatePage() {
                                             type="text"
                                             value={partyB}
                                             onChange={handlePartyBChange}
+                                            onFocus={() => setShowPartyBSuggestions(true)}
                                             placeholder="乙の名前を入力"
                                             className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                         />
+                                        {showPartyBSuggestions && (
+                                            <>
+                                                <div
+                                                    className="fixed inset-0 z-10"
+                                                    onClick={() => setShowPartyBSuggestions(false)}
+                                                ></div>
+                                                <div className="absolute z-20 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                                                    {companies
+                                                        .filter(company =>
+                                                            company.name.toLowerCase().includes(partyB.toLowerCase()) ||
+                                                            (company.presidentName && company.presidentName.toLowerCase().includes(partyB.toLowerCase()))
+                                                        )
+                                                        .map((company) => (
+                                                            <button
+                                                                key={company.id}
+                                                                onClick={() => handleSelectCompanyForPartyB(company)}
+                                                                className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex flex-col"
+                                                            >
+                                                                <span className="font-medium">{company.name}</span>
+                                                                <span className="text-xs text-gray-500 dark:text-gray-400">
+                                                                    {company.presidentTitle} {company.presidentName}
+                                                                </span>
+                                                            </button>
+                                                        ))}
+                                                    {companies.filter(company =>
+                                                        company.name.toLowerCase().includes(partyB.toLowerCase()) ||
+                                                        (company.presidentName && company.presidentName.toLowerCase().includes(partyB.toLowerCase()))
+                                                    ).length === 0 && (
+                                                            <div className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
+                                                                一致する企業が見つかりません
+                                                            </div>
+                                                        )}
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
                                     <div className="mb-4">
                                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -1179,7 +1280,7 @@ export default function TemplatePage() {
                                     {editingTemplateId ? '上書き保存' : '保存'}
                                 </button>
                                 <button
-                                    onClick={handleDownload}
+                                    onClick={handleDownloadAndCreateContract}
                                     className="px-6 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md transition-colors"
                                 >
                                     ダウンロード

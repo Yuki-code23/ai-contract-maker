@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useRef, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import BackButton from '@/components/BackButton';
 import { Contract } from '@/data/contracts';
 import { createContract, getContracts } from '@/app/actions/contracts';
@@ -23,8 +23,12 @@ interface Company {
     contractCount: number;
 }
 
-export default function NewContractPage() {
+function NewContractForm() {
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const paramPartyA = searchParams.get('partyA');
+    const paramPartyB = searchParams.get('partyB');
+    const paramTitle = searchParams.get('title');
 
     const [formData, setFormData] = useState<Omit<Contract, 'id'>>({
         timestamp: new Date().toISOString().slice(0, 16).replace('T', ' '),
@@ -85,11 +89,14 @@ export default function NewContractPage() {
                 // Load user settings
                 const settings = await getUserSettings();
                 if (settings) {
-                    // Pre-fill Party A with the correct Seller company name (請求書元)
+                    // Pre-fill fields from Query Params OR settings
                     const profile = settings.company_profile;
-                    if (profile && profile.name) {
-                        setFormData(prev => ({ ...prev, partyA: profile.name }));
-                    }
+                    setFormData(prev => ({
+                        ...prev,
+                        partyA: paramPartyA || profile?.name || prev.partyA,
+                        partyB: paramPartyB || prev.partyB,
+                        title: paramTitle || prev.title
+                    }));
 
                     // Keep Party B default for suggestions
                     if (settings.party_b_info?.companyName) {
@@ -360,5 +367,17 @@ export default function NewContractPage() {
                 </div>
             </form>
         </div>
+    );
+}
+
+export default function NewContractPage() {
+    return (
+        <Suspense fallback={
+            <div className="flex-1 flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            </div>
+        }>
+            <NewContractForm />
+        </Suspense>
     );
 }
