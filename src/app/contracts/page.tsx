@@ -12,6 +12,7 @@ import NotificationToast, { useToast } from '@/components/NotificationToast';
 function ContractsContent() {
     const searchParams = useSearchParams();
     const companyFilter = searchParams.get('company');
+    const idFilter = searchParams.get('id');
     const [contracts, setContracts] = useState<Contract[]>([]);
     const [filteredContracts, setFilteredContracts] = useState<Contract[]>([]);
     const { toasts, addToast, removeToast } = useToast();
@@ -60,7 +61,10 @@ function ContractsContent() {
     }, []);
 
     useEffect(() => {
-        if (companyFilter) {
+        if (idFilter) {
+            const filtered = contracts.filter(c => c.id === parseInt(idFilter));
+            setFilteredContracts(filtered);
+        } else if (companyFilter) {
             const filtered = contracts.filter(c =>
                 c.partyA === companyFilter || c.partyB === companyFilter
             );
@@ -68,7 +72,7 @@ function ContractsContent() {
         } else {
             setFilteredContracts(contracts);
         }
-    }, [companyFilter, contracts]);
+    }, [idFilter, companyFilter, contracts]);
 
     const handleEdit = (contractId: number) => {
         window.location.href = `/contracts/${contractId}/edit`;
@@ -180,6 +184,7 @@ function ContractsContent() {
                             <thead className="bg-gray-50 dark:bg-gray-900">
                                 <tr>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-b">タイムスタンプ</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-b">契約番号</th>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-b">甲</th>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-b">乙</th>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-b">ステータス</th>
@@ -193,6 +198,7 @@ function ContractsContent() {
                                 {filteredContracts.map((contract) => (
                                     <tr key={contract.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
                                         <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{contract.timestamp}</td>
+                                        <td className="px-4 py-3 text-sm font-mono text-gray-600 dark:text-gray-400">{contract.contractNumber || '-'}</td>
                                         <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">{contract.partyA}</td>
                                         <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{contract.partyB}</td>
                                         <td className="px-4 py-3 text-sm">

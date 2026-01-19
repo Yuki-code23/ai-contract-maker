@@ -12,7 +12,9 @@ export default function NewBillingPage() {
             <div className="flex-1 overflow-y-auto">
                 <div className="p-8 pb-32">
                     <BackButton />
-                    <InvoiceForm />
+                    <Suspense fallback={<div>読み込み中...</div>}>
+                        <InvoiceForm />
+                    </Suspense>
                 </div>
             </div>
         </div>

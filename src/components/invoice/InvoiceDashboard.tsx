@@ -13,9 +13,10 @@ import { useRouter } from 'next/navigation';
 
 interface InvoiceDashboardProps {
     billings: Billing[];
+    onSelectFilter?: (type: 'Sales' | 'Unpaid' | 'Overdue') => void;
 }
 
-export default function InvoiceDashboard({ billings }: InvoiceDashboardProps) {
+export default function InvoiceDashboard({ billings, onSelectFilter }: InvoiceDashboardProps) {
     const router = useRouter();
 
     // Calculations
@@ -31,7 +32,7 @@ export default function InvoiceDashboard({ billings }: InvoiceDashboardProps) {
         .reduce((sum, b) => sum + (b.total || b.amount || 0), 0);
 
     const unpaidAmount = billings
-        .filter(b => b.status === 'Sent')
+        .filter(b => b.status === 'Sent' || b.status === 'Approved')
         .reduce((sum, b) => sum + (b.total || b.amount || 0), 0);
 
     const overdueCount = billings.filter(b => {
@@ -43,41 +44,50 @@ export default function InvoiceDashboard({ billings }: InvoiceDashboardProps) {
         <div className="mb-8">
             {/* Summary Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                <button
+                    onClick={() => onSelectFilter?.('Sales')}
+                    className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 text-left hover:shadow-md hover:border-blue-200 dark:hover:border-blue-900 transition-all group"
+                >
                     <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">今月の売上 (税込)</h3>
-                        <div className="p-2 bg-blue-50 dark:bg-blue-900/30 rounded-full">
-                            <TrendingUp className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                        <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 group-hover:text-blue-600 transition-colors">今月の売上 (税込)</h3>
+                        <div className="p-2 bg-blue-50 dark:bg-blue-900/30 rounded-full group-hover:bg-blue-600 transition-colors">
+                            <TrendingUp className="w-5 h-5 text-blue-600 dark:text-blue-400 group-hover:text-white transition-colors" />
                         </div>
                     </div>
                     <p className="text-2xl font-bold text-gray-900 dark:text-white">
                         ¥{thisMonthSales.toLocaleString()}
                     </p>
-                </div>
+                </button>
 
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                <button
+                    onClick={() => onSelectFilter?.('Unpaid')}
+                    className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 text-left hover:shadow-md hover:border-yellow-200 dark:hover:border-yellow-900 transition-all group"
+                >
                     <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">未回収金額</h3>
-                        <div className="p-2 bg-yellow-50 dark:bg-yellow-900/30 rounded-full">
-                            <CreditCard className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+                        <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 group-hover:text-yellow-600 transition-colors">未回収金額</h3>
+                        <div className="p-2 bg-yellow-50 dark:bg-yellow-900/30 rounded-full group-hover:bg-yellow-600 transition-colors">
+                            <CreditCard className="w-5 h-5 text-yellow-600 dark:text-yellow-400 group-hover:text-white transition-colors" />
                         </div>
                     </div>
                     <p className="text-2xl font-bold text-gray-900 dark:text-white">
                         ¥{unpaidAmount.toLocaleString()}
                     </p>
-                </div>
+                </button>
 
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700">
+                <button
+                    onClick={() => onSelectFilter?.('Overdue')}
+                    className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 text-left hover:shadow-md hover:border-red-200 dark:hover:border-red-900 transition-all group"
+                >
                     <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">期限超過アラート</h3>
-                        <div className="p-2 bg-red-50 dark:bg-red-900/30 rounded-full">
-                            <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
+                        <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 group-hover:text-red-600 transition-colors">期限超過アラート</h3>
+                        <div className="p-2 bg-red-50 dark:bg-red-900/30 rounded-full group-hover:bg-red-600 transition-colors">
+                            <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 group-hover:text-white transition-colors" />
                         </div>
                     </div>
                     <p className="text-2xl font-bold text-gray-900 dark:text-white">
                         {overdueCount} <span className="text-sm font-normal text-gray-500">件</span>
                     </p>
-                </div>
+                </button>
             </div>
 
             {/* Quick Actions */}

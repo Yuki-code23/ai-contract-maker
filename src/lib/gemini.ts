@@ -118,6 +118,8 @@ export async function extractContractMetadata(text: string, apiKey: string): Pro
       2. notice_period_days: 解約通知期限 (日数。例: "1ヶ月前"なら30, "3ヶ月前"なら90)
       3. billing_amount: 請求金額 (数値のみ。月額費用など定常的なもの。一時金は除外してください)
       4. payment_deadline: 支払期日 (例: "翌月末", "当月末", "翌月20日" などの文字列)
+      5. is_recurring: 定期的な請求（月額、四半期払い、年額など）かどうかの判定 (true or false)
+      6. recurring_interval: 定期的な請求の場合の頻度 ("monthly", "quarterly", "yearly")。不明または一時的なものはnull。
       
       契約書テキスト:
       ${text.substring(0, 15000)}
@@ -127,7 +129,9 @@ export async function extractContractMetadata(text: string, apiKey: string): Pro
         "end_date": "YYYY-MM-DD" or null,
         "notice_period_days": number or null,
         "billing_amount": number or null,
-        "payment_deadline": "string" or null
+        "payment_deadline": "string" or null,
+        "is_recurring": boolean,
+        "recurring_interval": "monthly" | "quarterly" | "yearly" | null
       }
     `;
 

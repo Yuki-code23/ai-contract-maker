@@ -25,6 +25,7 @@ export default function SettingsPage() {
     // Invoice Settings
     const [companyProfile, setCompanyProfile] = useState<CompanyProfile>();
     const [bankInfo, setBankInfo] = useState<BankInfo>();
+    const [sealUrl, setSealUrl] = useState<string>('');
 
     useEffect(() => {
         const loadSettings = async () => {
@@ -42,6 +43,7 @@ export default function SettingsPage() {
                     // Invoice
                     setCompanyProfile(settings.company_profile);
                     setBankInfo(settings.bank_info);
+                    setSealUrl(settings.seal_url || '');
                 }
             } catch (error) {
                 console.error('Failed to load settings:', error);
@@ -69,13 +71,14 @@ export default function SettingsPage() {
         }
     };
 
-    const handleSaveInvoiceSettings = async (profile: CompanyProfile, bank: BankInfo) => {
+    const handleSaveInvoiceSettings = async (profile: CompanyProfile, bank: BankInfo, seal: string | undefined) => {
         try {
             await saveUserSettings({
                 company_profile: profile,
-                bank_info: bank
+                bank_info: bank,
+                seal_url: seal
             });
-            // No alert needed here as the form handles it, but good to have consistent error handling
+            setSealUrl(seal || '');
         } catch (error) {
             throw error;
         }
@@ -106,8 +109,8 @@ export default function SettingsPage() {
                         <button
                             onClick={() => setActiveTab('contract')}
                             className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'contract'
-                                    ? 'bg-white dark:bg-gray-700 shadow text-blue-600 dark:text-blue-400'
-                                    : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                                ? 'bg-white dark:bg-gray-700 shadow text-blue-600 dark:text-blue-400'
+                                : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
                                 }`}
                         >
                             契約・API設定
@@ -115,8 +118,8 @@ export default function SettingsPage() {
                         <button
                             onClick={() => setActiveTab('invoice')}
                             className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'invoice'
-                                    ? 'bg-white dark:bg-gray-700 shadow text-blue-600 dark:text-blue-400'
-                                    : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                                ? 'bg-white dark:bg-gray-700 shadow text-blue-600 dark:text-blue-400'
+                                : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
                                 }`}
                         >
                             請求書設定 (自社情報)
@@ -173,6 +176,7 @@ export default function SettingsPage() {
                             <CompanyProfileForm
                                 initialProfile={companyProfile}
                                 initialBank={bankInfo}
+                                initialSealUrl={sealUrl}
                                 onSave={handleSaveInvoiceSettings}
                             />
                         </div>

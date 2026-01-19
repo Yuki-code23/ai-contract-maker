@@ -3,35 +3,102 @@
 import { useState, useEffect, useMemo } from 'react';
 import Sidebar from '@/components/Sidebar';
 import { UserMenu } from '@/components/UserMenu';
-import { getBillings } from '../actions/billings';
+import { getBillings, deleteBilling, duplicateBilling, updateBillingStatus } from '@/app/actions/billings';
+import { getUserSettings } from '../actions/settings';
 import { Billing } from '@/lib/db';
 import Link from 'next/link';
-import { Search, Filter, Calendar, ChevronDown } from 'lucide-react';
+import { Search, Filter, Calendar, ChevronDown, Download, Copy, Trash2, Edit, FileText } from 'lucide-react';
 
 import InvoiceDashboard from '@/components/invoice/InvoiceDashboard';
+import { generateInvoicePDF } from '@/lib/invoice-pdf';
+
+import { useRouter } from 'next/navigation';
 
 export default function BillingsPage() {
+    const router = useRouter();
     const [billings, setBillings] = useState<(Billing & { contractPartyB?: string })[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'All' | 'Planned' | 'Unpaid' | 'Paid'>('All');
     const [searchQuery, setSearchQuery] = useState('');
     const [periodFilter, setPeriodFilter] = useState<'All' | 'ThisMonth' | 'NextMonth'>('All');
+    const [overdueOnly, setOverdueOnly] = useState(false);
+
+    const loadBillings = async () => {
+        try {
+            setLoading(true);
+            const data = await getBillings();
+            setBillings(data);
+        } catch (error) {
+            console.error('Failed to load billings:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     useEffect(() => {
-        const loadBillings = async () => {
-            try {
-                setLoading(true);
-                const data = await getBillings();
-                setBillings(data);
-            } catch (error) {
-                console.error('Failed to load billings:', error);
-            } finally {
-                setLoading(false);
-            }
-        };
-
         loadBillings();
     }, []);
+
+    const handleDashboardFilter = (type: 'Sales' | 'Unpaid' | 'Overdue') => {
+        if (type === 'Sales') {
+            setActiveTab('All');
+            setPeriodFilter('ThisMonth');
+            setOverdueOnly(false);
+        } else if (type === 'Unpaid') {
+            setActiveTab('Unpaid');
+            setPeriodFilter('All');
+            setOverdueOnly(false);
+        } else if (type === 'Overdue') {
+            setActiveTab('All');
+            setPeriodFilter('All');
+            setOverdueOnly(true);
+        }
+    };
+
+    const handleDelete = async (id: number) => {
+        if (!confirm('この請求書を削除してもよろしいですか？')) return;
+        try {
+            await deleteBilling(id);
+            loadBillings();
+        } catch (error) {
+            alert('削除に失敗しました');
+        }
+    };
+
+    const handleEdit = (id: number) => {
+        router.push(`/billings/${id}/edit?editId=${id}`);
+    };
+
+    const handleDuplicate = (id: number) => {
+        router.push(`/billings/new?duplicateId=${id}`);
+    };
+
+    const handleStatusChange = async (id: number, newStatus: Billing['status']) => {
+        try {
+            const result = await updateBillingStatus(id, newStatus);
+            if (result.success) {
+                loadBillings();
+            }
+        } catch (error) {
+            console.error(error);
+            alert('ステータスの更新に失敗しました');
+        }
+    };
+
+    const handleDownloadPDF = async (billing: Billing & { contractPartyB?: string }) => {
+        try {
+            const settings = await getUserSettings();
+            await generateInvoicePDF(
+                billing,
+                settings?.company_profile,
+                settings?.bank_info,
+                undefined // TODO: Seal
+            );
+        } catch (error) {
+            console.error(error);
+            alert('PDF生成に失敗しました');
+        }
+    };
 
     const filteredBillings = useMemo(() => {
         const now = new Date();
@@ -39,6 +106,13 @@ export default function BillingsPage() {
         const thisYear = now.getFullYear();
 
         return billings.filter(b => {
+            // 0. Overdue Only Filter (Special Dashboard Case)
+            if (overdueOnly) {
+                if (b.status === 'Paid') return false;
+                if (!b.payment_deadline) return false;
+                if (new Date(b.payment_deadline) >= now) return false;
+            }
+
             // 1. Status Filter
             if (activeTab === 'Planned' && b.status !== 'Planned') return false;
             if (activeTab === 'Unpaid' && !(b.status === 'Sent' || b.status === 'Approved')) return false;
@@ -73,7 +147,7 @@ export default function BillingsPage() {
 
             return true;
         });
-    }, [billings, activeTab, searchQuery, periodFilter]);
+    }, [billings, activeTab, searchQuery, periodFilter, overdueOnly]);
 
     const getStatusColor = (status: string) => {
         switch (status) {
@@ -105,7 +179,7 @@ export default function BillingsPage() {
 
                 <main className="flex-1 overflow-y-auto p-8">
                     {/* Dashboard Summary */}
-                    <InvoiceDashboard billings={billings} />
+                    <InvoiceDashboard billings={billings} onSelectFilter={handleDashboardFilter} />
 
                     {/* Controls Bar */}
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
@@ -114,8 +188,11 @@ export default function BillingsPage() {
                             {['All', 'Planned', 'Unpaid', 'Paid'].map((tab) => (
                                 <button
                                     key={tab}
-                                    onClick={() => setActiveTab(tab as any)}
-                                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === tab
+                                    onClick={() => {
+                                        setActiveTab(tab as any);
+                                        setOverdueOnly(false);
+                                    }}
+                                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${activeTab === tab && !overdueOnly
                                         ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
                                         : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
                                         }`}
@@ -144,7 +221,10 @@ export default function BillingsPage() {
                             <div className="relative">
                                 <select
                                     value={periodFilter}
-                                    onChange={(e) => setPeriodFilter(e.target.value as any)}
+                                    onChange={(e) => {
+                                        setPeriodFilter(e.target.value as any);
+                                        setOverdueOnly(false);
+                                    }}
                                     className="appearance-none pl-10 pr-10 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer"
                                 >
                                     <option value="All">すべての期間</option>
@@ -172,17 +252,20 @@ export default function BillingsPage() {
                                         金額 (税込)
                                     </th>
                                     <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                        関連契約
+                                    </th>
+                                    <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                                         ステータス
                                     </th>
-                                    <th scope="col" className="relative px-6 py-4">
-                                        <span className="sr-only">各種操作</span>
+                                    <th scope="col" className="px-6 py-4 text-right">
+                                        アクション
                                     </th>
                                 </tr>
                             </thead>
                             <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                                 {loading ? (
                                     <tr>
-                                        <td colSpan={5} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
+                                        <td colSpan={6} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
                                             <div className="flex flex-col items-center gap-2">
                                                 <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
                                                 <span>データを取得中...</span>
@@ -191,24 +274,22 @@ export default function BillingsPage() {
                                     </tr>
                                 ) : filteredBillings.length === 0 ? (
                                     <tr>
-                                        <td colSpan={5} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
-                                            <div className="flex flex-col items-center gap-1">
-                                                <Filter className="w-8 h-8 opacity-20 mb-2" />
-                                                <p className="font-medium">該当する請求書が見つかりません</p>
-                                                <p className="text-xs">フィルター条件を変えてみてください</p>
-                                            </div>
+                                        <td colSpan={6} className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
+                                            <p>表示する請求書がありません。</p>
                                         </td>
                                     </tr>
                                 ) : (
                                     filteredBillings.map((billing) => (
                                         <tr key={billing.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group">
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <div className="text-sm font-medium text-gray-900 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                                                    {(billing.client_info as any)?.name || billing.contractPartyB || '名無しの請求先'}
-                                                </div>
-                                                <div className="text-xs text-gray-500 dark:text-gray-400 font-mono">
-                                                    {billing.invoice_number || '-'}
-                                                </div>
+                                                <Link href={`/billings/${billing.id}`} className="block">
+                                                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                                                        {(billing.client_info as any)?.name || billing.contractPartyB || '名無しの請求先'}
+                                                    </div>
+                                                    <div className="text-xs text-gray-500 dark:text-gray-400 font-mono">
+                                                        {billing.invoice_number || '-'}
+                                                    </div>
+                                                </Link>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                                 {billing.payment_deadline || '-'}
@@ -216,15 +297,71 @@ export default function BillingsPage() {
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100 font-bold font-mono">
                                                 {billing.total ? `¥${billing.total.toLocaleString()}` : (billing.amount ? `¥${billing.amount.toLocaleString()}` : '-')}
                                             </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-xs">
+                                                {billing.contract_id ? (
+                                                    <Link
+                                                        href={`/contracts?id=${billing.contract_id}`}
+                                                        className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline"
+                                                    >
+                                                        <FileText className="w-3 h-3" />
+                                                        {(billing as any).contractNumber || `CNT-${billing.contract_id}`}
+                                                    </Link>
+                                                ) : (
+                                                    <span className="text-gray-400 italic">なし</span>
+                                                )}
+                                            </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <span className={`px-2.5 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(billing.status)} shadow-sm border border-black/5`}>
-                                                    {getStatusText(billing.status)}
-                                                </span>
+                                                <div className="relative inline-block">
+                                                    <select
+                                                        value={billing.status}
+                                                        onChange={(e) => handleStatusChange(billing.id, e.target.value as any)}
+                                                        className={`px-3 py-1 text-xs font-semibold rounded-full ${getStatusColor(billing.status)} shadow-sm border border-black/5 cursor-pointer outline-none focus:ring-2 focus:ring-blue-500/50 appearance-none text-center pr-2`}
+                                                    >
+                                                        <option value="Planned">予定</option>
+                                                        <option value="Approved">承認済</option>
+                                                        <option value="Sent">送付済</option>
+                                                        <option value="Paid">支払済</option>
+                                                    </select>
+                                                </div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                <Link href={`/billings/${billing.id}`} className="inline-flex items-center px-3 py-1.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-md hover:bg-blue-600 hover:text-white dark:hover:bg-blue-600 transition-all">
-                                                    詳細を見る
-                                                </Link>
+                                                <div className="flex justify-end gap-2">
+                                                    <button
+                                                        onClick={() => handleDownloadPDF(billing)}
+                                                        title="PDFをダウンロード"
+                                                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-md transition-all"
+                                                    >
+                                                        <Download className="w-4 h-4" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDuplicate(billing.id)}
+                                                        title="コピーして作成"
+                                                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-md transition-all"
+                                                    >
+                                                        <Copy className="w-4 h-4" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleEdit(billing.id)}
+                                                        title="詳細を編集"
+                                                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-md transition-all"
+                                                    >
+                                                        <Edit className="w-4 h-4" />
+                                                    </button>
+                                                    <Link
+                                                        href={`/billings/${billing.id}`}
+                                                        title="詳細を表示"
+                                                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-md transition-all"
+                                                    >
+                                                        <Search className="w-4 h-4" />
+                                                    </Link>
+                                                    <button
+                                                        onClick={() => handleDelete(billing.id)}
+                                                        title="削除"
+                                                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-md transition-all"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     ))

@@ -3,7 +3,7 @@
 -- 1. Create billings table if it doesn't exist
 CREATE TABLE IF NOT EXISTS billings (
     id SERIAL PRIMARY KEY,
-    contract_id INTEGER NOT NULL REFERENCES contracts(id) ON DELETE CASCADE,
+    contract_id INTEGER REFERENCES contracts(id) ON DELETE CASCADE,
     user_email TEXT NOT NULL,
     issue_date DATE,
     payment_deadline DATE,
@@ -34,6 +34,12 @@ BEGIN
     END IF;
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'billings' AND column_name = 'total') THEN
         ALTER TABLE billings ADD COLUMN total NUMERIC DEFAULT 0;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'billings' AND column_name = 'is_recurring') THEN
+        ALTER TABLE billings ADD COLUMN is_recurring BOOLEAN DEFAULT false;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'billings' AND column_name = 'recurring_interval') THEN
+        ALTER TABLE billings ADD COLUMN recurring_interval TEXT; -- monthly, quarterly, yearly
     END IF;
 END $$;
 

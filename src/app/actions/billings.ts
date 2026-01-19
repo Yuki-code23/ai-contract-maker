@@ -16,7 +16,8 @@ export async function getBillings() {
         .select(`
             *,
             contracts (
-                party_b
+                party_b,
+                contract_number
             )
         `)
         .eq('user_email', session.user.email)
@@ -29,8 +30,9 @@ export async function getBillings() {
 
     return data.map((b: any) => ({
         ...b,
-        contractPartyB: b.contracts?.party_b
-    })) as (Billing & { contractPartyB?: string })[]
+        contractPartyB: b.contracts?.party_b,
+        contractNumber: b.contracts?.contract_number
+    })) as (Billing & { contractPartyB?: string; contractNumber?: string })[]
 }
 
 export async function getBilling(id: number) {
@@ -45,7 +47,8 @@ export async function getBilling(id: number) {
             *,
             contracts (
                 party_a,
-                party_b
+                party_b,
+                contract_number
             )
         `)
         .eq('id', id)
@@ -62,7 +65,8 @@ export async function getBilling(id: number) {
     return {
         ...data,
         contractPartyA: data.contracts?.party_a,
-        contractPartyB: data.contracts?.party_b
+        contractPartyB: data.contracts?.party_b,
+        contractNumber: data.contracts?.contract_number
     }
 }
 
@@ -70,6 +74,16 @@ export async function updateBillingStatus(id: number, status: Billing['status'])
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
         throw new Error("Unauthorized")
+    }
+
+    const { data: billing, error: getError } = await supabaseServer
+        .from('billings')
+        .select('*')
+        .eq('id', id)
+        .single()
+
+    if (getError || !billing) {
+        throw new Error("Billing not found")
     }
 
     const { error } = await supabaseServer
@@ -85,12 +99,71 @@ export async function updateBillingStatus(id: number, status: Billing['status'])
 
     // Requirement 3.C: Automatic sending logic
     if (status === 'Sent') {
-        // In a real app, we would call Resend/SendGrid API here
-        // For now, we simulate this action
         console.log(`[EMAIL SENT] Invoice #${id} has been sent to client.`);
     }
 
+    // RECURRING BILLING ENGINE: "Paid" -> "Next Draft"
+    if (status === 'Paid' && billing.is_recurring && billing.recurring_interval) {
+        try {
+            const nextIssueDate = new Date(billing.issue_date || new Date());
+            const nextDeadlineDate = new Date(billing.payment_deadline || new Date());
+
+            const monthsToAdd =
+                billing.recurring_interval === 'monthly' ? 1 :
+                    billing.recurring_interval === 'quarterly' ? 3 :
+                        billing.recurring_interval === 'yearly' ? 12 : 0;
+
+            if (monthsToAdd > 0) {
+                nextIssueDate.setMonth(nextIssueDate.getMonth() + monthsToAdd);
+                nextDeadlineDate.setMonth(nextDeadlineDate.getMonth() + monthsToAdd);
+
+                const { id: _, created_at: __, updated_at: ___, invoice_number: ____, status: _____, ...rest } = billing;
+
+                await supabaseServer
+                    .from('billings')
+                    .insert({
+                        ...rest,
+                        status: 'Planned',
+                        issue_date: nextIssueDate.toISOString().split('T')[0],
+                        payment_deadline: nextDeadlineDate.toISOString().split('T')[0],
+                        invoice_number: `INV-AUTO-${Date.now().toString().slice(-4)}`,
+                        created_at: new Date().toISOString(),
+                        updated_at: new Date().toISOString()
+                    });
+
+                console.log(`[RECURRING] Auto-generated next draft for billing #${id} (${billing.recurring_interval})`);
+            }
+        } catch (e) {
+            console.error("Failed to generate next recurring billing:", e);
+        }
+    }
+
     return { success: true }
+}
+
+export async function updateBilling(id: number, billing: Partial<Billing>) {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+        throw new Error("Unauthorized")
+    }
+
+    const { data, error } = await supabaseServer
+        .from('billings')
+        .update({
+            ...billing,
+            updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .eq('user_email', session.user.email)
+        .select()
+        .single()
+
+    if (error) {
+        console.error('Error updating billing:', error)
+        throw new Error(`Failed to update billing: ${error.message}`)
+    }
+
+    return { success: true, billing: data }
 }
 
 export async function createBilling(billing: Partial<Billing>) {
@@ -99,27 +172,90 @@ export async function createBilling(billing: Partial<Billing>) {
         throw new Error("Unauthorized")
     }
 
+    // Clean billing data to avoid sending fields that might not exist in older DB schemas if not needed
+    const insertData: any = {
+        ...billing,
+        user_email: session.user.email
+    }
+
+    // Only include recurring fields if they are actually used
+    if (!billing.is_recurring) {
+        delete insertData.is_recurring;
+        delete insertData.recurring_interval;
+    }
+
     const { data, error } = await supabaseServer
         .from('billings')
-        .insert({
-            ...billing,
-            user_email: session.user.email
-        })
+        .insert(insertData)
         .select()
         .single()
 
     if (error) {
         console.error('Error creating billing:', error)
-        throw new Error("Failed to create billing")
+        throw new Error(`Failed to create billing: ${error.message} (Code: ${error.code})`)
     }
 
     return { success: true, billing: data }
 }
 
-export async function generateBillingsFromContracts() {
-    // This function checks all contracts and generates planned billings
-    // For now, let's just make sure we can create one manually or via this helper
-    // In a real scenario, this might be loop or triggered logic
-    // Implementation deferred to cron/step 3 or on-demand
+export async function deleteBilling(id: number) {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+        throw new Error("Unauthorized")
+    }
+
+    const { error } = await supabaseServer
+        .from('billings')
+        .delete()
+        .eq('id', id)
+        .eq('user_email', session.user.email)
+
+    if (error) {
+        console.error('Error deleting billing:', error)
+        throw new Error("Failed to delete billing")
+    }
+
     return { success: true }
+}
+
+export async function duplicateBilling(id: number) {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+        throw new Error("Unauthorized")
+    }
+
+    // 1. Fetch original
+    const { data: original, error: fetchError } = await supabaseServer
+        .from('billings')
+        .select('*')
+        .eq('id', id)
+        .single()
+
+    if (fetchError || !original) {
+        throw new Error("Failed to fetch original billing for duplication")
+    }
+
+    // 2. Prepare new data
+    const { id: _, created_at: __, updated_at: ___, ...rest } = original
+    const newInvoiceNumber = `INV-COPY-${Date.now().toString().slice(-4)}`;
+
+    // 3. Insert
+    const { data, error: insertError } = await supabaseServer
+        .from('billings')
+        .insert({
+            ...rest,
+            invoice_number: newInvoiceNumber,
+            status: 'Planned',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+        })
+        .select()
+        .single()
+
+    if (insertError) {
+        console.error('Error duplicating billing:', insertError)
+        throw new Error("Failed to duplicate billing")
+    }
+
+    return { success: true, billing: data }
 }

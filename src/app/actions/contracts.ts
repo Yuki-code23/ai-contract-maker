@@ -43,6 +43,7 @@ export async function getContracts() {
         autoRenewal: c.auto_renewal,
         deadline: c.deadline,
         metadata: c.metadata,
+        contractNumber: c.contract_number,
         // Keep original created_at for sorting if needed
         createdAt: c.created_at
     }))
@@ -75,6 +76,7 @@ export async function getContract(id: number) {
         storagePath: data.storage_path,
         autoRenewal: data.auto_renewal,
         deadline: data.deadline,
+        contractNumber: data.contract_number,
         createdAt: data.created_at
     }
 }
@@ -94,7 +96,8 @@ export async function createContract(contract: Omit<Contract, 'id' | 'user_email
         storage_path: contract.storagePath,
         auto_renewal: contract.autoRenewal,
         deadline: contract.deadline,
-        metadata: contract.metadata || {} // Default to empty object or existing metadata
+        metadata: contract.metadata || {}, // Default to empty object or existing metadata
+        contract_number: contract.contractNumber || `CNT-${new Date().getFullYear()}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`
     }
 
     // Attempt to extract metadata if content is provided and no metadata exists (or we want to augment it)

@@ -9,10 +9,11 @@ import { Save } from 'lucide-react';
 interface CompanyProfileFormProps {
     initialProfile?: CompanyProfile;
     initialBank?: BankInfo;
-    onSave: (profile: CompanyProfile, bank: BankInfo) => Promise<void>;
+    initialSealUrl?: string;
+    onSave: (profile: CompanyProfile, bank: BankInfo, sealUrl?: string) => Promise<void>;
 }
 
-export default function CompanyProfileForm({ initialProfile, initialBank, onSave }: CompanyProfileFormProps) {
+export default function CompanyProfileForm({ initialProfile, initialBank, initialSealUrl, onSave }: CompanyProfileFormProps) {
     const [loading, setLoading] = useState(false);
     const [profile, setProfile] = useState<CompanyProfile>(initialProfile || {
         name: '',
@@ -20,7 +21,8 @@ export default function CompanyProfileForm({ initialProfile, initialBank, onSave
         contact_person: '',
         registration_number: '',
         phone: '',
-        email: ''
+        email: '',
+        default_due_date: 'end_of_next_month'
     });
     const [bank, setBank] = useState<BankInfo>(initialBank || {
         bank_name: '',
@@ -28,17 +30,30 @@ export default function CompanyProfileForm({ initialProfile, initialBank, onSave
         account_number: '',
         account_holder: ''
     });
+    const [sealUrl, setSealUrl] = useState<string>(initialSealUrl || '');
 
     useEffect(() => {
         if (initialProfile) setProfile(initialProfile);
         if (initialBank) setBank(initialBank);
-    }, [initialProfile, initialBank]);
+        if (initialSealUrl) setSealUrl(initialSealUrl);
+    }, [initialProfile, initialBank, initialSealUrl]);
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setSealUrl(reader.result as string);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
         try {
-            await onSave(profile, bank);
+            await onSave(profile, bank, sealUrl);
             alert('設定を保存しました');
         } catch (error) {
             alert('保存に失敗しました');
@@ -64,17 +79,33 @@ export default function CompanyProfileForm({ initialProfile, initialBank, onSave
                             required
                         />
                     </div>
-                    <div>
-                        <label className="block text-sm font-medium mb-1">登録番号 (インボイス)</label>
-                        <input
-                            type="text"
-                            value={profile.registration_number}
-                            onChange={e => setProfile({ ...profile, registration_number: e.target.value })}
-                            className="w-full p-2 border rounded dark:bg-gray-900 dark:border-gray-600"
-                            placeholder="T1234567890123"
-                        />
-                        <p className="text-xs text-gray-500 mt-1">※ Tから始まる13桁の番号を入力してください</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium mb-1">登録番号 (インボイス)</label>
+                            <input
+                                type="text"
+                                value={profile.registration_number}
+                                onChange={e => setProfile({ ...profile, registration_number: e.target.value })}
+                                className="w-full p-2 border rounded dark:bg-gray-900 dark:border-gray-600"
+                                placeholder="T1234567890123"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">※ Tから始まる13桁の番号</p>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium mb-1">デフォルト支払期限</label>
+                            <select
+                                value={profile.default_due_date}
+                                onChange={e => setProfile({ ...profile, default_due_date: e.target.value })}
+                                className="w-full p-2 border rounded dark:bg-gray-900 dark:border-gray-600"
+                            >
+                                <option value="end_of_month">当月末</option>
+                                <option value="end_of_next_month">翌月末</option>
+                                <option value="30_days">30日後</option>
+                                <option value="60_days">60日後</option>
+                            </select>
+                        </div>
                     </div>
+
                     <div>
                         <label className="block text-sm font-medium mb-1">住所</label>
                         <input
@@ -105,15 +136,37 @@ export default function CompanyProfileForm({ initialProfile, initialBank, onSave
                             />
                         </div>
                     </div>
-                    <div>
-                        <label className="block text-sm font-medium mb-1">担当者名 (任意)</label>
+                </div>
+            </div>
+
+            {/* Seal Upload */}
+            <div>
+                <h3 className="text-lg font-semibold mb-4 text-gray-900 dark:text-gray-100 border-b pb-2">印影設定</h3>
+                <div className="flex items-start gap-6">
+                    <div className="flex-1">
+                        <label className="block text-sm font-medium mb-2">社印・担当者印 (PNG/JPG)</label>
                         <input
-                            type="text"
-                            value={profile.contact_person}
-                            onChange={e => setProfile({ ...profile, contact_person: e.target.value })}
-                            className="w-full p-2 border rounded dark:bg-gray-900 dark:border-gray-600"
+                            type="file"
+                            accept="image/*"
+                            onChange={handleFileChange}
+                            className="w-full block text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 dark:file:bg-gray-700 dark:file:text-gray-300"
                         />
+                        <p className="text-xs text-gray-500 mt-2">※ 背景が透明なPNG画像を推奨します。PDFの右上に表示されます。</p>
                     </div>
+                    {sealUrl && (
+                        <div className="relative group">
+                            <div className="w-24 h-24 border border-gray-200 dark:border-gray-600 rounded-md bg-white p-1 flex items-center justify-center overflow-hidden">
+                                <img src={sealUrl} alt="Seal Preview" className="max-w-full max-h-full object-contain" />
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setSealUrl('')}
+                                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
 

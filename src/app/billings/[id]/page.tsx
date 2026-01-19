@@ -2,9 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import Sidebar from '@/components/Sidebar';
 import BackButton from '@/components/BackButton';
 import { getBilling, updateBillingStatus } from '@/app/actions/billings';
+import { FileText } from 'lucide-react';
 import { getUserSettings } from '@/app/actions/settings';
 import { Billing, CompanyProfile, BankInfo } from '@/lib/db';
 import { generateInvoicePDF } from '@/lib/invoice-pdf';
@@ -141,6 +143,20 @@ export default function BillingDetailPage({ params }: { params: { id: string } }
                                     )}
                                 </div>
                             </div>
+                            {billing.contract_id && (
+                                <div className="text-right">
+                                    <h2 className="text-sm font-medium text-gray-500 dark:text-gray-400">関連契約</h2>
+                                    <div className="mt-1">
+                                        <Link
+                                            href={`/contracts?id=${billing.contract_id}`}
+                                            className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-md hover:underline text-sm font-medium"
+                                        >
+                                            <FileText className="w-4 h-4" />
+                                            {(billing as any).contractNumber || `CNT-${billing.contract_id}`}
+                                        </Link>
+                                    </div>
+                                </div>
+                            )}
                             <div className="flex items-center gap-3">
                                 <label className="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">ステータスを変更:</label>
                                 <select

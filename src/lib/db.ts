@@ -23,6 +23,7 @@ export interface Contract {
     auto_renewal: boolean
     deadline?: string
     metadata?: ContractMetadata
+    contract_number?: string
     created_at?: string
     updated_at?: string
 }
@@ -67,6 +68,8 @@ export interface ContractMetadata {
     notice_period_days?: number
     billing_amount?: number
     payment_deadline?: string // e.g., "翌月末"
+    is_recurring?: boolean
+    recurring_interval?: 'monthly' | 'quarterly' | 'yearly' | null
     [key: string]: any
 }
 
@@ -84,6 +87,8 @@ export interface Billing {
     tax_total?: { tax8: number; tax10: number }
     total?: number
     status: 'Planned' | 'Approved' | 'Sent' | 'Paid'
+    is_recurring?: boolean
+    recurring_interval?: 'monthly' | 'quarterly' | 'yearly' | null
     pdf_url?: string
     created_at?: string
     updated_at?: string
@@ -98,12 +103,13 @@ export interface InvoiceItem {
 }
 
 export interface CompanyProfile {
-    name: string
-    address: string
-    contact_person?: string
-    registration_number?: string // T+13
-    phone?: string
-    email?: string
+    name: string;
+    address: string;
+    contact_person?: string;
+    registration_number?: string; // T+13
+    phone?: string;
+    email?: string;
+    default_due_date?: string; // e.g., "end_of_next_month", "30_days"
 }
 
 export interface BankInfo {

@@ -178,13 +178,14 @@ export async function generateInvoicePDF(
 
             // Table
             const tableTop = totalBoxY - 60;
-            const colX = { desc: 50, qty: 320, unit: 360, price: 430, amount: 500 };
+            const colX = { desc: 50, qty: 280, unit: 320, price: 380, rate: 440, amount: 500 };
 
             page.drawRectangle({ x: 40, y: tableTop - 15, width: width - 80, height: 20, color: rgb(0.95, 0.95, 0.95) });
             drawText('品名', colX.desc, tableTop - 10, 10, 'left');
             drawText('数量', colX.qty, tableTop - 10, 10, 'right');
             drawText('単位', colX.unit, tableTop - 10, 10, 'center');
             drawText('単価', colX.price, tableTop - 10, 10, 'right');
+            drawText('税率', colX.rate, tableTop - 10, 10, 'center');
             drawText('金額', colX.amount, tableTop - 10, 10, 'right');
 
             page.drawLine({ start: { x: 40, y: tableTop - 15 }, end: { x: width - 40, y: tableTop - 15 }, thickness: 1 });
@@ -192,20 +193,34 @@ export async function generateInvoicePDF(
             let yPos = tableTop - 35;
             const itemsList = billing.items || [];
 
+            // For calculating taxable bases
+            let taxable10 = 0;
+            let taxable8 = 0;
+
             if (itemsList.length === 0 && subtotalVal > 0) {
                 drawText('ご請求費用', colX.desc, yPos, 10, 'left');
                 drawText('1', colX.qty, yPos, 10, 'right');
                 drawText('式', colX.unit, yPos, 10, 'center');
                 drawText(subtotalVal.toLocaleString(), colX.price, yPos, 10, 'right');
+                drawText('10%', colX.rate, yPos, 10, 'center');
                 drawText(subtotalVal.toLocaleString(), colX.amount, yPos, 10, 'right');
+                taxable10 = subtotalVal;
                 yPos -= 25;
             } else {
                 itemsList.forEach(item => {
-                    const rowAmount = (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0);
+                    const price = Number(item.unitPrice || 0);
+                    const qty = Number(item.quantity || 0);
+                    const rowAmount = qty * price;
+                    const rate = item.taxRate || 10;
+
+                    if (rate === 10) taxable10 += rowAmount;
+                    if (rate === 8) taxable8 += rowAmount;
+
                     drawText(item.description || '', colX.desc, yPos, 10, 'left');
-                    drawText((item.quantity || 0).toString(), colX.qty, yPos, 10, 'right');
+                    drawText(qty.toString(), colX.qty, yPos, 10, 'right');
                     drawText(item.unit || '', colX.unit, yPos, 10, 'center');
-                    drawText((item.unitPrice || 0).toLocaleString(), colX.price, yPos, 10, 'right');
+                    drawText(price.toLocaleString(), colX.price, yPos, 10, 'right');
+                    drawText(`${rate}%`, colX.rate, yPos, 10, 'center');
                     drawText(rowAmount.toLocaleString(), colX.amount, yPos, 10, 'right');
                     yPos -= 25;
                 });
@@ -213,23 +228,32 @@ export async function generateInvoicePDF(
 
             // Summary Bottom
             yPos -= 10;
-            drawText('小計', 350, yPos, 10, 'left');
+            drawText('小計 (税抜)', 350, yPos, 10, 'left');
             drawText(`¥${subtotalVal.toLocaleString()}`, 500, yPos, 10, 'right');
             yPos -= 15;
-            if (Number(taxTotalsVal.tax10 || 0) > 0) {
+
+            // Invoice System Requirement: Show Taxable Base per Rate
+            if (taxable10 > 0) {
+                drawText('10%対象金額', 350, yPos, 10, 'left');
+                drawText(`¥${taxable10.toLocaleString()}`, 500, yPos, 10, 'right');
+                yPos -= 12;
                 drawText('消費税 (10%)', 350, yPos, 10, 'left');
                 drawText(`¥${Number(taxTotalsVal.tax10).toLocaleString()}`, 500, yPos, 10, 'right');
                 yPos -= 15;
             }
-            if (Number(taxTotalsVal.tax8 || 0) > 0) {
+            if (taxable8 > 0) {
+                drawText('8%対象金額', 350, yPos, 10, 'left');
+                drawText(`¥${taxable8.toLocaleString()}`, 500, yPos, 10, 'right');
+                yPos -= 12;
                 drawText('消費税 (軽減8%)', 350, yPos, 10, 'left');
                 drawText(`¥${Number(taxTotalsVal.tax8).toLocaleString()}`, 500, yPos, 10, 'right');
                 yPos -= 15;
             }
+
             page.drawLine({ start: { x: 350, y: yPos + 5 }, end: { x: width - 40, y: yPos + 5 }, thickness: 1 });
             yPos -= 5;
-            drawText('合計', 350, yPos, 12, 'left');
-            drawText(`¥${billingTotal.toLocaleString()}`, 500, yPos, 12, 'right');
+            drawText('合計', 350, yPos, 12, 'left', rgb(0, 0, 0));
+            drawText(`¥${billingTotal.toLocaleString()}`, 500, yPos, 12, 'right', rgb(0, 0, 0));
 
             // Bank
             if (bankInfo) {
