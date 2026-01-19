@@ -6,7 +6,7 @@ import BackButton from '@/components/BackButton';
 import Sidebar from '@/components/Sidebar';
 import { extractPartiesFromText } from '@/lib/gemini';
 import { getTemplates, createTemplate, updateTemplate, deleteTemplate, migrateTemplates } from '@/app/actions/templates';
-import { getCompanies } from '@/app/actions/companies';
+import { getCompanies, createCompany } from '@/app/actions/companies';
 import { getUserSettings } from '@/app/actions/settings';
 import { UserMenu } from '@/components/UserMenu';
 
@@ -65,6 +65,7 @@ export default function TemplatePage() {
     const [savedPartyBAddress, setSavedPartyBAddress] = useState(''); // Store saved Party B address from settings
     const [savedPartyBPresidentPosition, setSavedPartyBPresidentPosition] = useState(''); // Store saved Party B president position
     const [savedPartyBPresidentName, setSavedPartyBPresidentName] = useState(''); // Store saved Party B president name
+    const [savedSellerInfo, setSavedSellerInfo] = useState<{ name: string, address: string, presidentTitle: string, presidentName: string, staffTitle: string, staffName: string } | null>(null); // Store saved Seller Info (Party A)
     const [isEditing, setIsEditing] = useState(false);
     const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null); // Track if we are editing an existing saved template
     const [savedTemplates, setSavedTemplates] = useState<SavedTemplate[]>([]);
@@ -81,24 +82,7 @@ export default function TemplatePage() {
             try {
                 // 1. Load Templates
                 const templatesData = await getTemplates();
-                if (templatesData && templatesData.length > 0) {
-                    setSavedTemplates(templatesData);
-                } else {
-                    // Check localStorage for migration
-                    const saved = localStorage.getItem('savedTemplates');
-                    if (saved) {
-                        try {
-                            const parsed = JSON.parse(saved);
-                            if (Array.isArray(parsed) && parsed.length > 0) {
-                                await migrateTemplates(parsed);
-                                const reloaded = await getTemplates();
-                                setSavedTemplates(reloaded || []);
-                            }
-                        } catch (e) {
-                            console.error('Template migration failed:', e);
-                        }
-                    }
-                }
+                setSavedTemplates(templatesData || []);
 
                 // 2. Load User Settings (Party B)
                 const settings = await getUserSettings();
@@ -117,6 +101,19 @@ export default function TemplatePage() {
                         setSavedPartyBPresidentPosition(info.presidentTitle || '');
                         setSavedPartyBPresidentName(info.presidentName || '');
                     }
+                }
+
+                // 3. Load Seller Info (Party A)
+                if (settings && settings.company_profile) {
+                    const profile = settings.company_profile;
+                    setSavedSellerInfo({
+                        name: profile.name || '',
+                        address: profile.address || '',
+                        presidentTitle: profile.president_title || '',
+                        presidentName: profile.president_name || '',
+                        staffTitle: profile.staff_title || '',
+                        staffName: profile.staff_name || ''
+                    });
                 }
 
                 // 3. Load Companies
@@ -491,6 +488,63 @@ export default function TemplatePage() {
             if (savedPartyBPresidentName) setPresidentNameB(savedPartyBPresidentName);
 
             updateContentWithParties(originalContent, partyA, savedPartyBInfo, addressA, newAddressB, presidentPositionA, presidentNameA, newPresidentPositionB, newPresidentNameB);
+        }
+    };
+
+    const handleSaveToCompanyList = async (name: string, address: string, presidentTitle: string, presidentName: string) => {
+        if (!name) return;
+
+        // Check if already exists
+        if (companies.some(c => c.name === name)) {
+            alert('この企業はすでに企業一覧に登録されています。');
+            return;
+        }
+
+        try {
+            const newCompany = {
+                name,
+                address,
+                presidentTitle,
+                presidentName,
+                postalCode: '',
+                building: null,
+                contactPerson: '',
+                email: '',
+                phone: '',
+                position: null
+            };
+
+            await createCompany(newCompany);
+
+            // Refresh companies list
+            const updatedCompanies = await getCompanies();
+            setCompanies(updatedCompanies || []);
+
+            alert(`${name} を企業一覧に保存しました。`);
+        } catch (error) {
+            console.error('Failed to save company:', error);
+            alert('企業一覧への保存に失敗しました。');
+        }
+    };
+
+    const handleUseMyCompanyInfo = () => {
+        if (savedSellerInfo) {
+            setPartyA(savedSellerInfo.name);
+            setAddressA(savedSellerInfo.address);
+            setPresidentPositionA(savedSellerInfo.presidentTitle);
+            setPresidentNameA(savedSellerInfo.presidentName);
+
+            updateContentWithParties(
+                originalContent,
+                savedSellerInfo.name,
+                partyB,
+                savedSellerInfo.address,
+                addressB,
+                savedSellerInfo.presidentTitle,
+                savedSellerInfo.presidentName,
+                presidentPositionB,
+                presidentNameB
+            );
         }
     };
 
@@ -911,6 +965,34 @@ export default function TemplatePage() {
                                             クリア
                                         </button>
                                     </div>
+                                    <div className="flex flex-wrap items-center gap-2 mb-2">
+                                        {savedSellerInfo && (
+                                            <button
+                                                onClick={handleUseMyCompanyInfo}
+                                                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs transition-colors"
+                                            >
+                                                自社情報を入力
+                                            </button>
+                                        )}
+                                        <button
+                                            onClick={() => window.location.href = '/companies'}
+                                            className="px-3 py-1 border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 rounded text-xs transition-colors"
+                                        >
+                                            企業一覧から選択
+                                        </button>
+                                        {partyA && !companies.some(c => c.name === partyA) && (
+                                            <button
+                                                onClick={() => handleSaveToCompanyList(partyA, addressA, presidentPositionA, presidentNameA)}
+                                                className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs transition-colors flex items-center gap-1"
+                                                title="入力された情報を企業一覧に新規登録します"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                                                </svg>
+                                                企業一覧に保存
+                                            </button>
+                                        )}
+                                    </div>
                                     <div className="relative">
                                         <input
                                             type="text"
@@ -918,7 +1000,7 @@ export default function TemplatePage() {
                                             onChange={handlePartyAChange}
                                             onFocus={() => setShowPartyASuggestions(true)}
                                             placeholder="甲の名前を入力"
-                                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
+                                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
                                         />
                                         {showPartyASuggestions && companies.length > 0 && (
                                             <>
@@ -943,27 +1025,18 @@ export default function TemplatePage() {
                                             </>
                                         )}
                                     </div>
-                                    {companies.length > 0 && (
-                                        <button
-                                            onClick={() => setShowPartyASuggestions(!showPartyASuggestions)}
-                                            className="mb-4 text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 flex items-center gap-1"
-                                        >
-                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zM3.75 12h.007v.008H3.75V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm-.375 5.25h.007v.008H3.75v-.008zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
-                                            </svg>
-                                            企業一覧から選択
-                                        </button>
-                                    )}
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                        甲の住所（所在地）
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={addressA}
-                                        onChange={handleAddressAChange}
-                                        placeholder="甲の住所を入力"
-                                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
-                                    />
+                                    <div className="mb-4">
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            甲の住所（所在地）
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={addressA}
+                                            onChange={handleAddressAChange}
+                                            placeholder="甲の住所を入力"
+                                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        />
+                                    </div>
                                     <div className="grid grid-cols-2 gap-2">
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -1003,34 +1076,55 @@ export default function TemplatePage() {
                                             クリア
                                         </button>
                                     </div>
-                                    <input
-                                        type="text"
-                                        value={partyB}
-                                        onChange={handlePartyBChange}
-                                        placeholder="乙の名前を入力"
-                                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
-                                    />
-                                    {savedPartyBInfo && (
+                                    <div className="flex flex-wrap items-center gap-2 mb-2">
+                                        {savedPartyBInfo && (
+                                            <button
+                                                onClick={handleUseSavedPartyB}
+                                                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs transition-colors"
+                                            >
+                                                乙を自社に設定
+                                            </button>
+                                        )}
                                         <button
-                                            onClick={handleUseSavedPartyB}
-                                            className="mb-4 text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 flex items-center gap-1"
+                                            onClick={() => window.location.href = '/companies'}
+                                            className="px-3 py-1 border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 rounded text-xs transition-colors"
                                         >
-                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-                                            </svg>
-                                            {savedPartyBInfo}
+                                            企業一覧から選択
                                         </button>
-                                    )}
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                        乙の住所（所在地）
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={addressB}
-                                        onChange={handleAddressBChange}
-                                        placeholder="乙の住所を入力"
-                                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
-                                    />
+                                        {partyB && !companies.some(c => c.name === partyB) && (
+                                            <button
+                                                onClick={() => handleSaveToCompanyList(partyB, addressB, presidentPositionB, presidentNameB)}
+                                                className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs transition-colors flex items-center gap-1"
+                                                title="入力された情報を企業一覧に新規登録します"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                                                </svg>
+                                                企業一覧に保存
+                                            </button>
+                                        )}
+                                    </div>
+                                    <div className="relative mb-4">
+                                        <input
+                                            type="text"
+                                            value={partyB}
+                                            onChange={handlePartyBChange}
+                                            placeholder="乙の名前を入力"
+                                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        />
+                                    </div>
+                                    <div className="mb-4">
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            乙の住所（所在地）
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={addressB}
+                                            onChange={handleAddressBChange}
+                                            placeholder="乙の住所を入力"
+                                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        />
+                                    </div>
                                     <div className="grid grid-cols-2 gap-2">
                                         <div>
                                             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -1057,7 +1151,6 @@ export default function TemplatePage() {
                                             />
                                         </div>
                                     </div>
-
                                 </div>
                             </div>
 

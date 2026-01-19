@@ -19,6 +19,10 @@ export default function CompanyProfileForm({ initialProfile, initialBank, initia
         name: '',
         address: '',
         contact_person: '',
+        president_title: '',
+        president_name: '',
+        staff_title: '',
+        staff_name: '',
         registration_number: '',
         phone: '',
         email: '',
@@ -106,6 +110,52 @@ export default function CompanyProfileForm({ initialProfile, initialBank, initia
                         </div>
                     </div>
 
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium mb-1">社長役職名</label>
+                            <input
+                                type="text"
+                                value={profile.president_title}
+                                onChange={e => setProfile({ ...profile, president_title: e.target.value })}
+                                className="w-full p-2 border rounded dark:bg-gray-900 dark:border-gray-600"
+                                placeholder="代表取締役"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium mb-1">社長氏名</label>
+                            <input
+                                type="text"
+                                value={profile.president_name}
+                                onChange={e => setProfile({ ...profile, president_name: e.target.value })}
+                                className="w-full p-2 border rounded dark:bg-gray-900 dark:border-gray-600"
+                                placeholder="田中 太郎"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium mb-1">担当者 役職名</label>
+                            <input
+                                type="text"
+                                value={profile.staff_title}
+                                onChange={e => setProfile({ ...profile, staff_title: e.target.value })}
+                                className="w-full p-2 border rounded dark:bg-gray-900 dark:border-gray-600"
+                                placeholder="営業部長"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium mb-1">担当者 氏名</label>
+                            <input
+                                type="text"
+                                value={profile.staff_name}
+                                onChange={e => setProfile({ ...profile, staff_name: e.target.value, contact_person: e.target.value })}
+                                className="w-full p-2 border rounded dark:bg-gray-900 dark:border-gray-600"
+                                placeholder="山田 花子"
+                            />
+                        </div>
+                    </div>
+
                     <div>
                         <label className="block text-sm font-medium mb-1">住所</label>
                         <input
@@ -124,15 +174,17 @@ export default function CompanyProfileForm({ initialProfile, initialBank, initia
                                 value={profile.phone}
                                 onChange={e => setProfile({ ...profile, phone: e.target.value })}
                                 className="w-full p-2 border rounded dark:bg-gray-900 dark:border-gray-600"
+                                placeholder="03-1234-5678"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium mb-1">Email</label>
+                            <label className="block text-sm font-medium mb-1">メールアドレス</label>
                             <input
                                 type="email"
                                 value={profile.email}
                                 onChange={e => setProfile({ ...profile, email: e.target.value })}
                                 className="w-full p-2 border rounded dark:bg-gray-900 dark:border-gray-600"
+                                placeholder="info@example.com"
                             />
                         </div>
                     </div>

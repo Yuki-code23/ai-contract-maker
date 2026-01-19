@@ -1,17 +1,5 @@
 import { supabase } from './supabase/client'
 
-export interface UserSettings {
-    id?: string
-    user_email: string
-    gemini_api_key?: string
-    google_client_id?: string
-    google_api_key?: string
-    google_drive_folder_id?: string
-    party_b_info?: any // JSONB
-    quick_access?: any // JSONB
-    created_at?: string
-    updated_at?: string
-}
 
 export interface Contract {
     id: number
@@ -22,6 +10,7 @@ export interface Contract {
     storage_path?: string
     auto_renewal: boolean
     deadline?: string
+    title?: string
     metadata?: ContractMetadata
     contract_number?: string
     created_at?: string
@@ -105,7 +94,11 @@ export interface InvoiceItem {
 export interface CompanyProfile {
     name: string;
     address: string;
-    contact_person?: string;
+    contact_person?: string; // Legacy/Staff name
+    president_title?: string;
+    president_name?: string;
+    staff_title?: string;
+    staff_name?: string;
     registration_number?: string; // T+13
     phone?: string;
     email?: string;

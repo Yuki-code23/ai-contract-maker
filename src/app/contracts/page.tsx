@@ -185,8 +185,8 @@ function ContractsContent() {
                                 <tr>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-b">タイムスタンプ</th>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-b">契約番号</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-b">甲</th>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-b">乙</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-b">契約内容 / 甲</th>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-b">ステータス</th>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-b">契約書保存先</th>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-b">契約自動更新</th>
@@ -199,8 +199,11 @@ function ContractsContent() {
                                     <tr key={contract.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
                                         <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{contract.timestamp}</td>
                                         <td className="px-4 py-3 text-sm font-mono text-gray-600 dark:text-gray-400">{contract.contractNumber || '-'}</td>
-                                        <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">{contract.partyA}</td>
-                                        <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{contract.partyB}</td>
+                                        <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 font-medium">{contract.partyB}</td>
+                                        <td className="px-4 py-3 text-sm">
+                                            <div className="font-medium text-gray-900 dark:text-gray-100">{contract.title || '-'}</div>
+                                            <div className="text-xs text-gray-500 dark:text-gray-400">{contract.partyA}</div>
+                                        </td>
                                         <td className="px-4 py-3 text-sm">
                                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(contract.status)}`}>
                                                 {contract.status}

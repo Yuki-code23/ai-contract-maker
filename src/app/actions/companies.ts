@@ -157,6 +157,26 @@ export async function deleteCompany(id: number) {
     }
 }
 
+export async function deleteCompanies(ids: number[]) {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+        throw new Error("Unauthorized")
+    }
+
+    if (ids.length === 0) return;
+
+    const { error } = await supabaseServer
+        .from('companies')
+        .delete()
+        .in('id', ids)
+        .eq('user_email', session.user.email)
+
+    if (error) {
+        console.error('Error deleting companies:', error)
+        throw new Error("Failed to delete companies")
+    }
+}
+
 export async function migrateCompanies(companies: any[]) {
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {

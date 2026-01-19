@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import BackButton from '@/components/BackButton';
 import Sidebar from '@/components/Sidebar';
 import { CONTRACTS, Contract } from '@/data/contracts';
-import { getCompanies, deleteCompany, migrateCompanies, createCompany } from '../actions/companies';
+import { getCompanies, deleteCompany, migrateCompanies, createCompany, deleteCompanies } from '../actions/companies';
 import { getContracts } from '../actions/contracts';
 import { UserMenu } from '@/components/UserMenu';
 
@@ -26,6 +26,7 @@ interface Company {
 export default function CompaniesPage() {
     const [companies, setCompanies] = useState<Company[]>([]);
     const [contracts, setContracts] = useState<Contract[]>([]);
+    const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
     // Load companies from server on mount
     useEffect(() => {
@@ -37,29 +38,7 @@ export default function CompaniesPage() {
 
                 // Load companies
                 const companiesData = await getCompanies();
-
-                if (companiesData && companiesData.length > 0) {
-                    setCompanies(companiesData);
-                } else {
-                    // Check localStorage for migration
-                    const savedCompanies = localStorage.getItem('companies');
-                    if (savedCompanies) {
-                        try {
-                            const parsed = JSON.parse(savedCompanies);
-                            if (Array.isArray(parsed) && parsed.length > 0) {
-                                await migrateCompanies(parsed);
-                                // Reload from server to get IDs
-                                const reloaded = await getCompanies();
-                                setCompanies(reloaded || []);
-                            } else {
-                                // No valid local data, leave empty or show empty state
-                                setCompanies([]);
-                            }
-                        } catch (e) {
-                            console.error('Migration failed:', e);
-                        }
-                    }
-                }
+                setCompanies(companiesData || []);
             } catch (error) {
                 console.error('Failed to load data:', error);
             }
@@ -75,94 +54,39 @@ export default function CompaniesPage() {
         ).length;
     };
 
-    const generateSampleCompanies = (): Company[] => {
-        const baseCompanies: Company[] = [
-            {
-                id: 1,
-                name: '株式会社A',
-                postalCode: '100-0001',
-                address: '東京都千代田区千代田1-1',
-                building: '千代田ビル5F',
-                presidentTitle: '代表取締役社長',
-                presidentName: '山田太郎',
-                contactPerson: '佐藤花子',
-                email: 'contact@company-a.co.jp',
-                phone: '03-1234-5678',
-                position: '営業部長',
-                contractCount: getContractCount('株式会社A'),
-            },
-            {
-                id: 2,
-                name: '株式会社B',
-                postalCode: '150-0001',
-                address: '東京都渋谷区神宮前1-2-3',
-                building: null,
-                presidentTitle: '代表取締役',
-                presidentName: '鈴木一郎',
-                contactPerson: '田中次郎',
-                email: 'info@company-b.jp',
-                phone: '03-9876-5432',
-                position: null,
-                contractCount: getContractCount('株式会社B'),
-            },
-            {
-                id: 3,
-                name: '合同会社C',
-                postalCode: '530-0001',
-                address: '大阪府大阪市北区梅田2-4-9',
-                building: '梅田ゲートタワー10F',
-                presidentTitle: '代表社員',
-                presidentName: '高橋三郎',
-                contactPerson: '伊藤美咲',
-                email: 'support@company-c.com',
-                phone: '06-1111-2222',
-                position: '総務課長',
-                contractCount: getContractCount('合同会社C'),
-            },
-        ];
-
-        const additionalCompanies: Company[] = Array.from({ length: 100 }, (_, i) => {
-            const id = i + 4;
-            return {
-                id,
-                name: `株式会社サンプル${id}`,
-                postalCode: `100-${String(id).padStart(4, '0')}`,
-                address: `東京都新宿区西新宿${id}-1-1`,
-                building: `サンプルビル${id}F`,
-                presidentTitle: '代表取締役',
-                presidentName: `サンプル社長${id}`,
-                contactPerson: `サンプル担当${id}`,
-                email: `contact${id}@sample.co.jp`,
-                phone: `03-${String(id).padStart(4, '0')}-0000`,
-                position: '担当',
-                contractCount: getContractCount(`株式会社サンプル${id}`),
-            };
-        });
-
-        return [...baseCompanies, ...additionalCompanies].sort((a, b) => a.name.localeCompare(b.name, 'ja'));
-    };
-
-    // remove original useEffect that loaded companies from localStorage
-    // (It was replaced/merged above)
-
-    const handleResetData = async () => {
-        if (confirm('現在のデータを削除し、サンプルデータ（数件）で初期化しますか？')) {
-            // For safety, maybe don't perform this massive delete/insert on server for now
-            // Or just insert samples if empty.
-            // Im implementing a "Load Samples" instead of reset/overwrite for safety.
-            const sampleCompanies = generateSampleCompanies().slice(0, 5); // Limit to 5 for safety
-
-            for (const c of sampleCompanies) {
-                await createCompany(c);
-            }
-
-            const reloaded = await getCompanies();
-            setCompanies(reloaded || []);
-        }
-    };
 
     const handleEdit = (companyId: number) => {
         window.location.href = `/companies/${companyId}/edit`;
+    };
+
+    const toggleSelectAll = () => {
+        if (selectedIds.length === companies.length) {
+            setSelectedIds([]);
+        } else {
+            setSelectedIds(companies.map(c => c.id));
+        }
+    };
+
+    const toggleSelect = (id: number) => {
+        if (selectedIds.includes(id)) {
+            setSelectedIds(selectedIds.filter(selectedId => selectedId !== id));
+        } else {
+            setSelectedIds([...selectedIds, id]);
+        }
+    };
+
+    const handleBulkDelete = async () => {
+        if (confirm(`選択した ${selectedIds.length} 件の企業を削除しますか？`)) {
+            try {
+                await deleteCompanies(selectedIds);
+                const updatedCompanies = companies.filter(c => !selectedIds.includes(c.id));
+                setCompanies(updatedCompanies);
+                setSelectedIds([]);
+            } catch (error) {
+                console.error('Failed to bulk delete companies:', error);
+                alert('一括削除に失敗しました');
+            }
+        }
     };
 
     const handleDelete = async (companyId: number) => {
@@ -171,6 +95,7 @@ export default function CompaniesPage() {
                 await deleteCompany(companyId);
                 const updatedCompanies = companies.filter(c => c.id !== companyId);
                 setCompanies(updatedCompanies);
+                setSelectedIds(selectedIds.filter(id => id !== companyId));
             } catch (error) {
                 console.error('Failed to delete company:', error);
                 alert('削除に失敗しました');
@@ -187,6 +112,17 @@ export default function CompaniesPage() {
                     <div className="flex justify-between items-center mb-6">
                         <h1 className="text-2xl font-bold">企業一覧</h1>
                         <div className="flex gap-2">
+                            {selectedIds.length > 0 && (
+                                <button
+                                    onClick={handleBulkDelete}
+                                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md text-sm transition-colors flex items-center gap-2"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                                    </svg>
+                                    一括削除 ({selectedIds.length})
+                                </button>
+                            )}
                             <button
                                 onClick={() => window.location.href = '/companies/new'}
                                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm transition-colors flex items-center gap-2"
@@ -196,12 +132,6 @@ export default function CompaniesPage() {
                                 </svg>
                                 企業を追加する
                             </button>
-                            <button
-                                onClick={handleResetData}
-                                className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md text-sm transition-colors"
-                            >
-                                サンプルデータで初期化
-                            </button>
                             <UserMenu />
                         </div>
                     </div>
@@ -209,6 +139,14 @@ export default function CompaniesPage() {
                         <table className="min-w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
                             <thead className="bg-gray-50 dark:bg-gray-900">
                                 <tr>
+                                    <th className="px-4 py-3 text-left border-b w-8">
+                                        <input
+                                            type="checkbox"
+                                            checked={companies.length > 0 && selectedIds.length === companies.length}
+                                            onChange={toggleSelectAll}
+                                            className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                                        />
+                                    </th>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-b">会社名</th>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-b">郵便番号</th>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-b">住所</th>
@@ -225,7 +163,15 @@ export default function CompaniesPage() {
                             </thead>
                             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                                 {companies.map((company) => (
-                                    <tr key={company.id} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                                    <tr key={company.id} className={`hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${selectedIds.includes(company.id) ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}>
+                                        <td className="px-4 py-3 border-b">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedIds.includes(company.id)}
+                                                onChange={() => toggleSelect(company.id)}
+                                                className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                                            />
+                                        </td>
                                         <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">{company.name}</td>
                                         <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{company.postalCode}</td>
                                         <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{company.address}</td>

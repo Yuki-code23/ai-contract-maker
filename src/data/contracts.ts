@@ -8,6 +8,7 @@ export interface Contract {
     autoRenewal: boolean;
     deadline: string;
     contractNumber?: string;
+    title?: string;
     metadata?: any;
 }
 
@@ -21,6 +22,7 @@ export const CONTRACTS: Contract[] = [
         storagePath: 'https://drive.google.com/file/d/abc123',
         autoRenewal: true,
         deadline: '2025-01-15',
+        title: 'システム開発委託契約書',
     },
     {
         id: 2,
@@ -31,6 +33,7 @@ export const CONTRACTS: Contract[] = [
         storagePath: 'https://drive.google.com/file/d/def456',
         autoRenewal: false,
         deadline: '2025-02-20',
+        title: 'コンサルティング業務委託契約書',
     },
     {
         id: 3,
@@ -41,5 +44,6 @@ export const CONTRACTS: Contract[] = [
         storagePath: 'https://drive.google.com/file/d/ghi789',
         autoRenewal: false,
         deadline: '2024-12-10',
+        title: '機密保持契約書',
     },
 ];

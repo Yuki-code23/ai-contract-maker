@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import BackButton from '@/components/BackButton';
 import { Contract } from '@/data/contracts';
 import { createContract, getContracts } from '@/app/actions/contracts';
+import { getCompanies } from '@/app/actions/companies';
 import { getUserSettings } from '@/app/actions/settings';
 
 interface Company {
@@ -33,6 +34,7 @@ export default function NewContractPage() {
         storagePath: '',
         autoRenewal: false,
         deadline: '',
+        title: '',
     });
 
     const [companies, setCompanies] = useState<Company[]>([]);
@@ -47,37 +49,52 @@ export default function NewContractPage() {
     useEffect(() => {
         const loadInitialData = async () => {
             try {
-                // Load contracts to build companies list
-                const contracts = await getContracts();
-                if (contracts) {
-                    const uniqueCompanies = new Set<string>();
-                    contracts.forEach((c: any) => {
-                        if (c.partyA) uniqueCompanies.add(c.partyA);
-                        if (c.partyB) uniqueCompanies.add(c.partyB);
-                    });
+                // Load companies from official Company List
+                const companyData = await getCompanies();
+                if (companyData && companyData.length > 0) {
+                    setCompanies(companyData);
+                } else {
+                    // Fallback to building list from existing contracts if no official companies registered
+                    const contracts = await getContracts();
+                    if (contracts) {
+                        const uniqueCompanies = new Set<string>();
+                        contracts.forEach((c: any) => {
+                            if (c.partyA) uniqueCompanies.add(c.partyA);
+                            if (c.partyB) uniqueCompanies.add(c.partyB);
+                        });
 
-                    const companyList: Company[] = Array.from(uniqueCompanies).map((name, index) => ({
-                        id: index,
-                        name: name,
-                        postalCode: '',
-                        address: '',
-                        building: null,
-                        presidentTitle: '',
-                        presidentName: '',
-                        contactPerson: '',
-                        email: '',
-                        phone: '',
-                        position: null,
-                        contractCount: 0
-                    }));
-                    companyList.sort((a, b) => a.name.localeCompare(b.name, 'ja'));
-                    setCompanies(companyList);
+                        const companyList: Company[] = Array.from(uniqueCompanies).map((name, index) => ({
+                            id: index,
+                            name: name,
+                            postalCode: '',
+                            address: '',
+                            building: null,
+                            presidentTitle: '',
+                            presidentName: '',
+                            contactPerson: '',
+                            email: '',
+                            phone: '',
+                            position: null,
+                            contractCount: 0
+                        }));
+                        companyList.sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+                        setCompanies(companyList);
+                    }
                 }
 
-                // Load user settings for Party B default
+                // Load user settings
                 const settings = await getUserSettings();
-                if (settings && settings.party_b_info && settings.party_b_info.companyName) {
-                    setSavedPartyBInfo(settings.party_b_info.companyName);
+                if (settings) {
+                    // Pre-fill Party A with the correct Seller company name (請求書元)
+                    const profile = settings.company_profile;
+                    if (profile && profile.name) {
+                        setFormData(prev => ({ ...prev, partyA: profile.name }));
+                    }
+
+                    // Keep Party B default for suggestions
+                    if (settings.party_b_info?.companyName) {
+                        setSavedPartyBInfo(settings.party_b_info.companyName);
+                    }
                 }
             } catch (error) {
                 console.error('Failed to load initial data:', error);
@@ -144,6 +161,20 @@ export default function NewContractPage() {
             <h1 className="text-2xl font-bold mb-6">新規契約追加</h1>
 
             <form onSubmit={handleSubmit} className="space-y-6 bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700">
+                <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        契約内容（タイトル） <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                        type="text"
+                        name="title"
+                        value={formData.title}
+                        onChange={handleChange}
+                        required
+                        placeholder="例：システム開発委託契約書"
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">

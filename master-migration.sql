@@ -19,3 +19,7 @@ WHERE contract_number IS NULL;
 -- 5. Refresh PostgREST schema cache (Supabase specific)
 -- Note: This is usually done via NOTIFY or restarting the project but we include it as a comment reminder
 -- NOTIFY pgrst, 'reload schema';
+
+-- 6. Add title column to contracts
+ALTER TABLE IF EXISTS contracts ADD COLUMN IF NOT EXISTS title TEXT;
+UPDATE contracts SET title = party_b || 'との契約書' WHERE title IS NULL;

@@ -44,6 +44,7 @@ export async function getContracts() {
         deadline: c.deadline,
         metadata: c.metadata,
         contractNumber: c.contract_number,
+        title: c.title,
         // Keep original created_at for sorting if needed
         createdAt: c.created_at
     }))
@@ -77,6 +78,7 @@ export async function getContract(id: number) {
         autoRenewal: data.auto_renewal,
         deadline: data.deadline,
         contractNumber: data.contract_number,
+        title: data.title,
         createdAt: data.created_at
     }
 }
@@ -96,6 +98,7 @@ export async function createContract(contract: Omit<Contract, 'id' | 'user_email
         storage_path: contract.storagePath,
         auto_renewal: contract.autoRenewal,
         deadline: contract.deadline,
+        title: contract.title,
         metadata: contract.metadata || {}, // Default to empty object or existing metadata
         contract_number: contract.contractNumber || `CNT-${new Date().getFullYear()}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`
     }
@@ -141,6 +144,7 @@ export async function updateContract(id: number, contract: any) {
     if (contract.storagePath) dbContract.storage_path = contract.storagePath
     if (contract.autoRenewal !== undefined) dbContract.auto_renewal = contract.autoRenewal
     if (contract.deadline) dbContract.deadline = contract.deadline
+    if (contract.title) dbContract.title = contract.title
 
     const { error } = await supabaseServer
         .from('contracts')

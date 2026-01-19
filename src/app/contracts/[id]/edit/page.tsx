@@ -20,6 +20,7 @@ export default function EditContractPage() {
         storagePath: '',
         autoRenewal: false,
         deadline: '',
+        title: '',
     });
 
     useEffect(() => {
@@ -84,6 +85,20 @@ export default function EditContractPage() {
             <h1 className="text-2xl font-bold mb-6">契約情報編集</h1>
 
             <form onSubmit={handleSubmit} className="space-y-6 bg-white dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700">
+                <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        契約内容（タイトル） <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                        type="text"
+                        name="title"
+                        value={formData.title}
+                        onChange={handleChange}
+                        required
+                        placeholder="例：システム開発委託契約書"
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
