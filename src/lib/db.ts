@@ -22,6 +22,7 @@ export interface Contract {
     storage_path?: string
     auto_renewal: boolean
     deadline?: string
+    metadata?: ContractMetadata
     created_at?: string
     updated_at?: string
 }
@@ -57,6 +58,74 @@ export interface Template {
     president_name_b?: string
     content: string
     saved_at: string
+    created_at?: string
+    updated_at?: string
+}
+
+export interface ContractMetadata {
+    end_date?: string
+    notice_period_days?: number
+    billing_amount?: number
+    payment_deadline?: string // e.g., "翌月末"
+    [key: string]: any
+}
+
+export interface Billing {
+    id: number
+    contract_id?: number | null
+    user_email: string
+    issue_date?: string
+    payment_deadline?: string
+    amount?: number
+    invoice_number?: string
+    items?: InvoiceItem[]
+    client_info?: any
+    subtotal?: number
+    tax_total?: { tax8: number; tax10: number }
+    total?: number
+    status: 'Planned' | 'Approved' | 'Sent' | 'Paid'
+    pdf_url?: string
+    created_at?: string
+    updated_at?: string
+}
+
+export interface InvoiceItem {
+    description: string
+    quantity: number
+    unit: string
+    unitPrice: number
+    taxRate: 0 | 8 | 10
+}
+
+export interface CompanyProfile {
+    name: string
+    address: string
+    contact_person?: string
+    registration_number?: string // T+13
+    phone?: string
+    email?: string
+}
+
+export interface BankInfo {
+    bank_name: string
+    branch_name: string
+    account_number: string
+    account_holder: string
+}
+
+export interface UserSettings {
+    id?: string
+    user_email: string
+    user_id?: string
+    gemini_api_key?: string
+    google_client_id?: string
+    google_api_key?: string
+    google_drive_folder_id?: string
+    party_b_info?: any
+    quick_access?: any
+    company_profile?: CompanyProfile
+    bank_info?: BankInfo
+    seal_url?: string
     created_at?: string
     updated_at?: string
 }

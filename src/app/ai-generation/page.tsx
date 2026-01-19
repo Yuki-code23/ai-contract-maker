@@ -5,8 +5,10 @@ import Link from 'next/link';
 import Script from 'next/script';
 import BackButton from '@/components/BackButton';
 import Sidebar from '@/components/Sidebar';
-import { generateContractResponse } from '@/lib/gemini';
+import { generateContractResponse, extractPartiesFromText, extractContractMetadata } from '@/lib/gemini';
 import { getUserSettings, migrateSettings } from '../actions/settings';
+import { createContract } from '../actions/contracts';
+import { useRouter } from 'next/navigation';
 import { UserMenu } from '@/components/UserMenu';
 
 interface Message {
@@ -59,6 +61,8 @@ export default function AIGenerationPage() {
     const [googleClientId, setGoogleClientId] = useState<string | null>(null);
     const [googleApiKey, setGoogleApiKey] = useState<string | null>(null);
     const [googleDriveFolderId, setGoogleDriveFolderId] = useState<string | null>(null);
+    const [savedDocId, setSavedDocId] = useState<string | null>(null); // Track saved doc ID
+    const router = useRouter(); // For redirection
 
     // Google Auth State
     const [gapiInited, setGapiInited] = useState(false);
@@ -372,6 +376,8 @@ export default function AIGenerationPage() {
                         documentId = createResponse.result.documentId;
                     }
 
+                    setSavedDocId(documentId); // Save ID for registration
+
                     // 2. Insert content
                     // We split content by newline and insert it
                     // For simplicity, we just insert the whole text at index 1
@@ -420,6 +426,60 @@ export default function AIGenerationPage() {
             console.error('Google Auth Error:', error);
             setIsSaving(false);
             alert('Google認証に失敗しました。');
+        }
+    };
+
+    // Register as Contract
+    const handleRegisterContract = async () => {
+        if (!contractContent.trim()) {
+            alert('登録する契約書の内容がありません。');
+            return;
+        }
+        if (!apiKey) {
+            alert('Gemini APIキーが設定されていません。');
+            return;
+        }
+
+        const confirmMsg = savedDocId
+            ? '契約書を登録しますか？\n（Googleドキュメントのリンクも自動で紐付けられます）'
+            : 'Googleドキュメントに保存されていませんが、契約書として登録しますか？\n（後でリンクを追加できます）';
+
+        if (!confirm(confirmMsg)) return;
+
+        setIsLoading(true);
+        try {
+            // 1. Extract Parties and Metadata
+            const [parties, metadata] = await Promise.all([
+                extractPartiesFromText(contractContent, apiKey),
+                extractContractMetadata(contractContent, apiKey)
+            ]);
+
+            // 2. Prepare Contract Data
+            const newContract = {
+                partyA: parties.partyA || '甲',
+                partyB: parties.partyB || '乙',
+                status: '提案中',
+                storagePath: savedDocId ? `https://docs.google.com/document/d/${savedDocId}/edit` : '',
+                autoRenewal: false, // Default
+                deadline: metadata.end_date || new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0], // Default 1 year if not found
+                content: contractContent, // For server-side extraction (redundant but safe)
+                metadata: metadata
+            };
+
+            // 3. Create Contract
+            const result = await createContract(newContract);
+            if (result.success) {
+                alert('契約書を登録しました！一覧画面へ移動します。');
+                router.push('/contracts');
+            } else {
+                throw new Error('登録に失敗しました');
+            }
+
+        } catch (error: any) {
+            console.error('Registration Error:', error);
+            alert(`登録エラー: ${error.message || '不明なエラーが発生しました'}`);
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -615,6 +675,17 @@ export default function AIGenerationPage() {
                                         <path d="M7 5v14h10V5H7zm10 10h-3v-2h3v2zm0-4h-3V9h3v2zm0-4h-3V5h3v2z" />
                                     </svg>
                                     {isSaving ? '保存中...' : 'Docs'}
+                                </button>
+                                <button
+                                    onClick={handleRegisterContract}
+                                    disabled={isLoading}
+                                    className="px-3 py-1 text-sm bg-green-600 hover:bg-green-700 text-white rounded-md transition-colors flex items-center gap-1"
+                                    title="契約データベースに登録"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                                    </svg>
+                                    登録
                                 </button>
                             </div>
                         </div>

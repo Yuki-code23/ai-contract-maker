@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { ContractMetadata } from "./db";
 
 export async function extractPartiesFromText(text: string, apiKey: string): Promise<{ partyA: string; partyB: string; addressA: string; addressB: string; presidentPositionA: string; presidentNameA: string; presidentPositionB: string; presidentNameB: string }> {
     try {
@@ -101,6 +102,57 @@ async function retryWithExponentialBackoff<T>(
 
             throw error;
         }
+    }
+}
+
+export async function extractContractMetadata(text: string, apiKey: string): Promise<ContractMetadata> {
+    try {
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+        const prompt = `
+      以下の契約書テキストから、以下の情報を抽出してJSON形式で返してください。
+      
+      抽出項目:
+      1. end_date: 契約終了日 (YYYY-MM-DD形式)
+      2. notice_period_days: 解約通知期限 (日数。例: "1ヶ月前"なら30, "3ヶ月前"なら90)
+      3. billing_amount: 請求金額 (数値のみ。月額費用など定常的なもの。一時金は除外してください)
+      4. payment_deadline: 支払期日 (例: "翌月末", "当月末", "翌月20日" などの文字列)
+      
+      契約書テキスト:
+      ${text.substring(0, 15000)}
+
+      出力フォーマットのみを返してください。Markdownコードブロックは不要です。
+      {
+        "end_date": "YYYY-MM-DD" or null,
+        "notice_period_days": number or null,
+        "billing_amount": number or null,
+        "payment_deadline": "string" or null
+      }
+    `;
+
+        const result = await retryWithExponentialBackoff(() => model.generateContent(prompt));
+        const response = await result.response;
+        const textResponse = response.text();
+        console.log("Gemini Metadata Extraction Response:", textResponse);
+
+        let cleanJson = textResponse.replace(/```json\n?|\n?```/g, '').trim();
+        const firstOpen = cleanJson.indexOf('{');
+        const lastClose = cleanJson.lastIndexOf('}');
+
+        if (firstOpen !== -1 && lastClose !== -1 && lastClose > firstOpen) {
+            cleanJson = cleanJson.substring(firstOpen, lastClose + 1);
+            try {
+                return JSON.parse(cleanJson);
+            } catch (e) {
+                console.error("JSON Parse Error in metadata extraction:", e);
+                return {};
+            }
+        }
+        return {};
+    } catch (error) {
+        console.error("Error extracting contract metadata:", error);
+        return {};
     }
 }
 

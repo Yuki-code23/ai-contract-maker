@@ -4,6 +4,8 @@ import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/auth'
 import { supabaseServer } from "@/lib/supabase/server"
 import { Contract } from "@/lib/db"
+import { extractContractMetadata } from "@/lib/gemini"
+import { getUserSettings } from "./settings"
 
 export async function getContracts() {
     const session = await getServerSession(authOptions)
@@ -40,6 +42,7 @@ export async function getContracts() {
         storagePath: c.storage_path,
         autoRenewal: c.auto_renewal,
         deadline: c.deadline,
+        metadata: c.metadata,
         // Keep original created_at for sorting if needed
         createdAt: c.created_at
     }))
@@ -90,7 +93,22 @@ export async function createContract(contract: Omit<Contract, 'id' | 'user_email
         status: contract.status || '提案中',
         storage_path: contract.storagePath,
         auto_renewal: contract.autoRenewal,
-        deadline: contract.deadline
+        deadline: contract.deadline,
+        metadata: contract.metadata || {} // Default to empty object or existing metadata
+    }
+
+    // Attempt to extract metadata if content is provided and no metadata exists (or we want to augment it)
+    if (contract.content && Object.keys(dbContract.metadata).length === 0) {
+        try {
+            const settings = await getUserSettings();
+            if (settings?.gemini_api_key) {
+                const extracted = await extractContractMetadata(contract.content, settings.gemini_api_key);
+                dbContract.metadata = extracted;
+            }
+        } catch (e) {
+            console.error("Failed to extract metadata during contract creation:", e);
+            // Continue without metadata
+        }
     }
 
     const { data, error } = await supabaseServer

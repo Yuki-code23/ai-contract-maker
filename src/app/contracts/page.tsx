@@ -5,14 +5,42 @@ import { useSearchParams } from 'next/navigation';
 import BackButton from '@/components/BackButton';
 import Sidebar from '@/components/Sidebar';
 import { CONTRACTS, Contract } from '@/data/contracts';
-import { getContracts, deleteContract } from '../actions/contracts';
+import { getContracts, deleteContract, createContract } from '../actions/contracts';
 import { UserMenu } from '@/components/UserMenu';
+import NotificationToast, { useToast } from '@/components/NotificationToast';
 
 function ContractsContent() {
     const searchParams = useSearchParams();
     const companyFilter = searchParams.get('company');
     const [contracts, setContracts] = useState<Contract[]>([]);
     const [filteredContracts, setFilteredContracts] = useState<Contract[]>([]);
+    const { toasts, addToast, removeToast } = useToast();
+
+    // Check for alerts on mount
+    useEffect(() => {
+        const checkAlerts = async () => {
+            try {
+                const res = await fetch('/api/cron/alerts');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.alerts && data.alerts.length > 0) {
+                        data.alerts.forEach((alert: any) => {
+                            addToast({
+                                title: '契約期限アラート',
+                                message: `「${alert.partyB}」との契約が${alert.daysRemaining}日後に切れます (${alert.endDate})。更新を確認してください。`,
+                                type: 'warning',
+                                duration: 10000
+                            });
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to check alerts:', error);
+            }
+        };
+
+        checkAlerts();
+    }, []);
 
     // Load contracts from server on mount
     useEffect(() => {
@@ -22,10 +50,6 @@ function ContractsContent() {
                 if (data && data.length > 0) {
                     setContracts(data);
                 } else {
-                    // Start with empty or handle migration if needed.
-                    // For contracts, maybe we don't migrate default static data?
-                    // Just show empty state if no contracts.
-                    // Or if we want to show demo data, we can keep it locally but better not to verify DB.
                     setContracts([]);
                 }
             } catch (error) {
@@ -58,20 +82,45 @@ function ContractsContent() {
                 // Update local state
                 const updatedContracts = contracts.filter(c => c.id !== contractId);
                 setContracts(updatedContracts);
-
-                // Also update filtered contracts if necessary
-                if (companyFilter) {
-                    const updatedFiltered = updatedContracts.filter(c =>
-                        c.partyA === companyFilter || c.partyB === companyFilter
-                    );
-                    setFilteredContracts(updatedFiltered);
-                } else {
-                    setFilteredContracts(updatedContracts);
-                }
             } catch (error) {
                 console.error('Failed to delete contract:', error);
                 alert('契約の削除中にエラーが発生しました。');
             }
+        }
+    };
+
+    const handleRenew = async (contract: Contract) => {
+        if (!confirm(`「${contract.partyB}」との契約を更新（コピー作成）しますか？\n期限を1年延長した新しい契約データを作成します。`)) return;
+
+        try {
+            const oldDeadline = contract.deadline ? new Date(contract.deadline) : new Date();
+            const newDeadline = new Date(oldDeadline);
+            newDeadline.setFullYear(newDeadline.getFullYear() + 1);
+
+            const newContractData = {
+                partyA: contract.partyA,
+                partyB: contract.partyB,
+                status: '提案中',
+                storagePath: contract.storagePath || '',
+                autoRenewal: contract.autoRenewal,
+                deadline: newDeadline.toISOString().split('T')[0], // +1 Year
+                metadata: contract.metadata // Copy metadata
+            };
+
+            const result = await createContract(newContractData);
+            if (result.success) {
+                // Refresh list
+                const refreshedContracts = await getContracts();
+                setContracts(refreshedContracts as any);
+                addToast({
+                    title: '契約更新',
+                    message: '新しい契約データを作成しました',
+                    type: 'success'
+                });
+            }
+        } catch (error) {
+            console.error('Renew error:', error);
+            alert('更新処理に失敗しました');
         }
     };
 
@@ -179,6 +228,13 @@ function ContractsContent() {
                                                 >
                                                     削除
                                                 </button>
+                                                <button
+                                                    onClick={() => handleRenew(contract)}
+                                                    className="px-3 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded transition-colors"
+                                                    title="期限を1年延長してコピー"
+                                                >
+                                                    更新
+                                                </button>
                                             </div>
                                         </td>
                                     </tr>
@@ -188,6 +244,7 @@ function ContractsContent() {
                     </div>
                 </div>
             </div>
+            <NotificationToast toasts={toasts} removeToast={removeToast} />
         </div>
     );
 }

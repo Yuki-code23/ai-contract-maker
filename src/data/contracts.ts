@@ -7,6 +7,7 @@ export interface Contract {
     storagePath: string;
     autoRenewal: boolean;
     deadline: string;
+    metadata?: any;
 }
 
 export const CONTRACTS: Contract[] = [
