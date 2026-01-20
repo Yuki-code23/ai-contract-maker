@@ -10,6 +10,8 @@ import {
     FileText
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import SalesAnalyticsModal from './SalesAnalyticsModal';
+
 
 interface InvoiceDashboardProps {
     billings: Billing[];
@@ -18,6 +20,7 @@ interface InvoiceDashboardProps {
 
 export default function InvoiceDashboard({ billings, onSelectFilter }: InvoiceDashboardProps) {
     const router = useRouter();
+    const [showSalesModal, setShowSalesModal] = useState(false);
 
     // Calculations
     const currentMonth = new Date().getMonth();
@@ -40,12 +43,16 @@ export default function InvoiceDashboard({ billings, onSelectFilter }: InvoiceDa
         return new Date(b.payment_deadline) < new Date();
     }).length;
 
+    const handleSalesCardClick = () => {
+        setShowSalesModal(true);
+    };
+
     return (
         <div className="mb-8">
             {/* Summary Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 <button
-                    onClick={() => onSelectFilter?.('Sales')}
+                    onClick={handleSalesCardClick}
                     className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 text-left hover:shadow-md hover:border-blue-200 dark:hover:border-blue-900 transition-all group"
                 >
                     <div className="flex items-center justify-between mb-4">
@@ -99,7 +106,21 @@ export default function InvoiceDashboard({ billings, onSelectFilter }: InvoiceDa
                     <Plus className="w-5 h-5" />
                     新規請求書作成
                 </button>
+                <button
+                    onClick={() => router.push('/billings?showContractModal=true')}
+                    className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg transition-colors font-medium shadow-sm"
+                >
+                    <FileText className="w-5 h-5" />
+                    契約書から請求書を作成
+                </button>
             </div>
+
+            {/* Sales Analytics Modal */}
+            <SalesAnalyticsModal
+                isOpen={showSalesModal}
+                onClose={() => setShowSalesModal(false)}
+            />
         </div>
     );
 }
+

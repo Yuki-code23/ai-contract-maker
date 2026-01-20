@@ -8,6 +8,7 @@ import { getBilling, createBilling, updateBilling } from '@/app/actions/billings
 import { getContracts } from '@/app/actions/contracts';
 import { getUserSettings } from '@/app/actions/settings';
 import { getCompanies } from '@/app/actions/companies';
+import { analyzeContractForInvoice } from '@/app/actions/analyze-contract';
 import { CompanyProfile, BankInfo, UserSettings } from '@/lib/db';
 import { Eye } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
@@ -26,6 +27,8 @@ export default function InvoiceForm() {
     const searchParams = useSearchParams();
     const duplicateId = searchParams.get('duplicateId');
     const editId = searchParams.get('editId');
+    const fromContract = searchParams.get('fromContract');
+    const contractId = searchParams.get('contractId');
     const [loading, setLoading] = useState(false);
 
     // Form State
@@ -128,12 +131,47 @@ export default function InvoiceForm() {
                         setCompanies(Array.from(uniqueCompanies).sort());
                     }
                 }
+
+                // Handle contract analysis auto-fill
+                if (fromContract && contractId) {
+                    try {
+                        const result = await analyzeContractForInvoice(fromContract);
+                        if (result.success && result.data) {
+                            // Auto-fill client info
+                            setClientName(result.data.client_info?.name || result.data.party_b);
+                            setSelectedContractId(result.data.contract_id);
+
+                            // Auto-fill items if available
+                            if (result.data.items && result.data.items.length > 0) {
+                                setItems(result.data.items);
+                            }
+
+                            // Auto-fill payment deadline if available
+                            if (result.data.payment_deadline) {
+                                // Try to parse payment_deadline (e.g., "翌月末") into actual date
+                                // For now, just use the default due date
+                                // TODO: Implement smart date parsing
+                            }
+
+                            // Auto-fill recurring settings
+                            if (result.data.is_recurring) {
+                                setIsRecurring(true);
+                                if (result.data.recurring_interval) {
+                                    setRecurringInterval(result.data.recurring_interval);
+                                }
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Failed to auto-fill from contract:', error);
+                        // Continue with empty form
+                    }
+                }
             } catch (err) {
                 console.error('Failed to load initial data', err);
             }
         };
         loadInitialData();
-    }, [duplicateId, editId]);
+    }, [duplicateId, editId, fromContract, contractId]);
 
     // Close suggestions when clicking outside
     useEffect(() => {

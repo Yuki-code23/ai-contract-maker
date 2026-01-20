@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { ContractMetadata } from "./db";
+import { ContractMetadata, InvoiceItem } from "./db";
+
 
 export async function extractPartiesFromText(text: string, apiKey: string): Promise<{ partyA: string; partyB: string; addressA: string; addressB: string; presidentPositionA: string; presidentNameA: string; presidentPositionB: string; presidentNameB: string }> {
     try {
@@ -218,6 +219,113 @@ export async function generateContractResponse(
         return text;
     } catch (error) {
         console.error("Error generating contract response:", error);
+        throw error;
+    }
+}
+
+/**
+ * Extract invoice data from contract text using Gemini API
+ * 契約書テキストから請求書データを抽出
+ */
+export async function extractInvoiceDataFromContract(
+    contractText: string,
+    apiKey: string
+): Promise<{
+    items: InvoiceItem[];
+    payment_deadline?: string;
+    amount?: number;
+    is_recurring?: boolean;
+    recurring_interval?: 'monthly' | 'quarterly' | 'yearly' | null;
+}> {
+    try {
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+        const prompt = `
+以下の契約書テキストから、請求書作成に必要な情報を抽出してJSON形式で返してください。
+
+抽出項目:
+1. items: 請求項目の配列。各項目には以下を含む:
+   - description: 項目の説明（例: "システム開発費用", "月額利用料"）
+   - quantity: 数量（通常は1）
+   - unit: 単位（例: "式", "ヶ月", "件"）
+   - unitPrice: 単価（税抜き）
+   - taxRate: 消費税率（0, 8, または 10）
+
+2. payment_deadline: 支払期日（例: "翌月末", "当月末", "翌月20日"）
+
+3. amount: 請求金額の合計（税抜き）。複数項目がある場合は合計値。
+
+4. is_recurring: 定期的な請求かどうか（true or false）
+
+5. recurring_interval: 定期請求の場合の頻度（"monthly", "quarterly", "yearly"）。一時的な請求の場合はnull。
+
+契約書テキスト:
+\${contractText.substring(0, 15000)}
+
+出力フォーマット（JSON形式のみ、Markdownコードブロックは不要）:
+{
+  "items": [
+    {
+      "description": "項目名",
+      "quantity": 1,
+      "unit": "式",
+      "unitPrice": 100000,
+      "taxRate": 10
+    }
+  ],
+  "payment_deadline": "翌月末",
+  "amount": 100000,
+  "is_recurring": true,
+  "recurring_interval": "monthly"
+}
+
+注意:
+- 契約書に明記されていない情報は推測しないでください
+- 金額が見つからない場合は null を返してください
+- 請求項目が複数ある場合は、すべて items 配列に含めてください
+`;
+
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        const textResponse = response.text();
+        console.log("Gemini Invoice Extraction Response:", textResponse);
+
+        // Clean up the response to extract JSON
+        let cleanJson = textResponse.replace(/```json\n?|\n?```/g, '').trim();
+        const firstOpen = cleanJson.indexOf('{');
+        const lastClose = cleanJson.lastIndexOf('}');
+
+        if (firstOpen !== -1 && lastClose !== -1 && lastClose > firstOpen) {
+            cleanJson = cleanJson.substring(firstOpen, lastClose + 1);
+            try {
+                const parsed = JSON.parse(cleanJson);
+
+                // Validate and normalize the data
+                return {
+                    items: Array.isArray(parsed.items) ? parsed.items : [],
+                    payment_deadline: parsed.payment_deadline || undefined,
+                    amount: typeof parsed.amount === 'number' ? parsed.amount : undefined,
+                    is_recurring: typeof parsed.is_recurring === 'boolean' ? parsed.is_recurring : false,
+                    recurring_interval: parsed.recurring_interval || null
+                };
+            } catch (e) {
+                console.error("JSON Parse Error in invoice extraction:", e);
+                return {
+                    items: [],
+                    is_recurring: false,
+                    recurring_interval: null
+                };
+            }
+        }
+
+        return {
+            items: [],
+            is_recurring: false,
+            recurring_interval: null
+        };
+    } catch (error) {
+        console.error("Error extracting invoice data from contract:", error);
         throw error;
     }
 }

@@ -68,6 +68,7 @@ export interface Billing {
     user_email: string
     issue_date?: string
     payment_deadline?: string
+    payment_date?: string
     amount?: number
     invoice_number?: string
     items?: InvoiceItem[]

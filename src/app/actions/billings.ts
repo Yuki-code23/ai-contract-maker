@@ -70,10 +70,15 @@ export async function getBilling(id: number) {
     }
 }
 
-export async function updateBillingStatus(id: number, status: Billing['status']) {
+export async function updateBillingStatus(id: number, status: Billing['status'], payment_date?: string) {
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
         throw new Error("Unauthorized")
+    }
+
+    // Validate: payment_date is required when marking as Paid
+    if (status === 'Paid' && !payment_date) {
+        throw new Error("Payment date is required when marking invoice as paid")
     }
 
     const { data: billing, error: getError } = await supabaseServer
@@ -86,9 +91,19 @@ export async function updateBillingStatus(id: number, status: Billing['status'])
         throw new Error("Billing not found")
     }
 
+    const updateData: any = {
+        status,
+        updated_at: new Date().toISOString()
+    }
+
+    // Add payment_date if provided
+    if (payment_date) {
+        updateData.payment_date = payment_date
+    }
+
     const { error } = await supabaseServer
         .from('billings')
-        .update({ status, updated_at: new Date().toISOString() })
+        .update(updateData)
         .eq('id', id)
         .eq('user_email', session.user.email)
 

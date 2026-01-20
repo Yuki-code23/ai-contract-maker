@@ -77,6 +77,9 @@ export default function TemplatePage() {
     const [showPartyBSuggestions, setShowPartyBSuggestions] = useState(false); // Toggle for Party B suggestions dropdown
     const [openMenuId, setOpenMenuId] = useState<string | null>(null);
     const [isExtractingParties, setIsExtractingParties] = useState(false);
+    const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
+    const [targetParty, setTargetParty] = useState<'partyA' | 'partyB' | null>(null);
+    const [companySearchQuery, setCompanySearchQuery] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Load saved templates, settings and companies from server
@@ -1027,7 +1030,11 @@ export default function TemplatePage() {
                                             </button>
                                         )}
                                         <button
-                                            onClick={() => window.location.href = '/companies'}
+                                            onClick={() => {
+                                                setTargetParty('partyA');
+                                                setIsCompanyModalOpen(true);
+                                                setCompanySearchQuery('');
+                                            }}
                                             className="px-3 py-1 border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 rounded text-xs transition-colors"
                                         >
                                             企業一覧から選択
@@ -1151,7 +1158,11 @@ export default function TemplatePage() {
                                             </button>
                                         )}
                                         <button
-                                            onClick={() => window.location.href = '/companies'}
+                                            onClick={() => {
+                                                setTargetParty('partyB');
+                                                setIsCompanyModalOpen(true);
+                                                setCompanySearchQuery('');
+                                            }}
                                             className="px-3 py-1 border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 rounded text-xs transition-colors"
                                         >
                                             企業一覧から選択
@@ -1293,6 +1304,89 @@ export default function TemplatePage() {
 
                 </div>
             </div>
+
+            {/* Company Selection Modal */}
+            {isCompanyModalOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white dark:bg-gray-800 w-full max-w-2xl rounded-xl shadow-2xl flex flex-col max-h-[80vh] overflow-hidden">
+                        <div className="p-6 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                            <h3 className="text-xl font-bold">
+                                {targetParty === 'partyA' ? '甲（契約者A）を選択' : '乙（契約者B）を選択'}
+                            </h3>
+                            <button
+                                onClick={() => setIsCompanyModalOpen(false)}
+                                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <div className="p-6 overflow-y-auto">
+                            <div className="mb-6">
+                                <input
+                                    type="text"
+                                    placeholder="会社名や代表者名で検索..."
+                                    value={companySearchQuery}
+                                    onChange={(e) => setCompanySearchQuery(e.target.value)}
+                                    className="w-full px-4 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-1 gap-3">
+                                {companies
+                                    .filter(c =>
+                                        c.name.toLowerCase().includes(companySearchQuery.toLowerCase()) ||
+                                        (c.presidentName && c.presidentName.toLowerCase().includes(companySearchQuery.toLowerCase()))
+                                    )
+                                    .map((company) => (
+                                        <button
+                                            key={company.id}
+                                            onClick={() => {
+                                                if (targetParty === 'partyA') {
+                                                    handleSelectCompanyForPartyA(company);
+                                                } else {
+                                                    handleSelectCompanyForPartyB(company);
+                                                }
+                                                setIsCompanyModalOpen(false);
+                                            }}
+                                            className="text-left p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all flex flex-col gap-1"
+                                        >
+                                            <div className="font-bold text-gray-900 dark:text-gray-100">{company.name}</div>
+                                            <div className="text-sm text-gray-500 dark:text-gray-400">
+                                                {company.presidentTitle} {company.presidentName}
+                                            </div>
+                                            <div className="text-xs text-gray-400 dark:text-gray-500 truncate">
+                                                {company.address}
+                                            </div>
+                                        </button>
+                                    ))}
+                                {companies.length === 0 && (
+                                    <div className="text-center py-12">
+                                        <p className="text-gray-500 dark:text-gray-400 mb-4">登録されている企業がありません。</p>
+                                        <button
+                                            onClick={() => window.location.href = '/companies/new'}
+                                            className="text-blue-600 hover:underline"
+                                        >
+                                            企業を新規登録する
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex justify-end">
+                            <button
+                                onClick={() => setIsCompanyModalOpen(false)}
+                                className="px-6 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg font-medium"
+                            >
+                                キャンセル
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

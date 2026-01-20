@@ -11,17 +11,30 @@ import { Search, Filter, Calendar, ChevronDown, Download, Copy, Trash2, Edit, Fi
 
 import InvoiceDashboard from '@/components/invoice/InvoiceDashboard';
 import { generateInvoicePDF } from '@/lib/invoice-pdf';
+import ContractInputModal from '@/components/invoice/ContractInputModal';
+import { analyzeContractForInvoice } from '@/app/actions/analyze-contract';
 
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 export default function BillingsPage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const [billings, setBillings] = useState<(Billing & { contractPartyB?: string })[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'All' | 'Planned' | 'Unpaid' | 'Paid'>('All');
     const [searchQuery, setSearchQuery] = useState('');
     const [periodFilter, setPeriodFilter] = useState<'All' | 'ThisMonth' | 'NextMonth'>('All');
     const [overdueOnly, setOverdueOnly] = useState(false);
+
+    // Modal state
+    const [showContractModal, setShowContractModal] = useState(false);
+    const [modalLoading, setModalLoading] = useState(false);
+    const [modalError, setModalError] = useState<string | undefined>();
+
+    // Payment date modal state
+    const [showPaymentDateModal, setShowPaymentDateModal] = useState(false);
+    const [pendingStatusChange, setPendingStatusChange] = useState<{ id: number; status: Billing['status'] } | null>(null);
+    const [paymentDate, setPaymentDate] = useState('');
 
     const loadBillings = async () => {
         try {
@@ -37,7 +50,40 @@ export default function BillingsPage() {
 
     useEffect(() => {
         loadBillings();
-    }, []);
+
+        // Check if modal should be shown from URL parameter
+        const shouldShowModal = searchParams?.get('showContractModal');
+        if (shouldShowModal === 'true') {
+            setShowContractModal(true);
+            // Remove the parameter from URL
+            router.replace('/billings');
+        }
+    }, [searchParams, router]);
+
+    const handleContractAnalysis = async (contractNumber: string) => {
+        setModalLoading(true);
+        setModalError(undefined);
+
+        try {
+            const result = await analyzeContractForInvoice(contractNumber);
+
+            if (result.success && result.data) {
+                // Redirect to new billing page with contract data
+                const params = new URLSearchParams({
+                    fromContract: contractNumber,
+                    contractId: result.data.contract_id.toString(),
+                });
+                router.push(`/billings/new?${params.toString()}`);
+            } else {
+                setModalError(result.error || '契約書の分析に失敗しました');
+                setModalLoading(false);
+            }
+        } catch (error) {
+            console.error('Contract analysis error:', error);
+            setModalError('契約書の分析中にエラーが発生しました');
+            setModalLoading(false);
+        }
+    };
 
     const handleDashboardFilter = (type: 'Sales' | 'Unpaid' | 'Overdue') => {
         if (type === 'Sales') {
@@ -74,6 +120,15 @@ export default function BillingsPage() {
     };
 
     const handleStatusChange = async (id: number, newStatus: Billing['status']) => {
+        // If changing to Paid status, show payment date modal
+        if (newStatus === 'Paid') {
+            setPendingStatusChange({ id, status: newStatus });
+            setPaymentDate(new Date().toISOString().split('T')[0]); // Default to today
+            setShowPaymentDateModal(true);
+            return;
+        }
+
+        // For other status changes, proceed directly
         try {
             const result = await updateBillingStatus(id, newStatus);
             if (result.success) {
@@ -82,6 +137,26 @@ export default function BillingsPage() {
         } catch (error) {
             console.error(error);
             alert('ステータスの更新に失敗しました');
+        }
+    };
+
+    const handleConfirmPaymentDate = async () => {
+        if (!pendingStatusChange || !paymentDate) {
+            alert('入金日を入力してください');
+            return;
+        }
+
+        try {
+            const result = await updateBillingStatus(pendingStatusChange.id, pendingStatusChange.status, paymentDate);
+            if (result.success) {
+                setShowPaymentDateModal(false);
+                setPendingStatusChange(null);
+                setPaymentDate('');
+                loadBillings();
+            }
+        } catch (error: any) {
+            console.error(error);
+            alert(error.message || 'ステータスの更新に失敗しました');
         }
     };
 
@@ -249,6 +324,9 @@ export default function BillingsPage() {
                                         支払期限
                                     </th>
                                     <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                        入金日
+                                    </th>
+                                    <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                                         金額 (税込)
                                     </th>
                                     <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -280,7 +358,7 @@ export default function BillingsPage() {
                                     </tr>
                                 ) : (
                                     filteredBillings.map((billing) => (
-                                        <tr key={billing.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group">
+                                        <tr key={billing.id} className={`hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors group ${(billing.payment_deadline && new Date(billing.payment_deadline) < new Date() && billing.status !== 'Paid') ? 'bg-red-100 dark:bg-red-900/30' : ''}`}>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <Link href={`/billings/${billing.id}`} className="block">
                                                     <div className="text-sm font-medium text-gray-900 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
@@ -293,6 +371,15 @@ export default function BillingsPage() {
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                                                 {billing.payment_deadline || '-'}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                                                {billing.payment_date ? (
+                                                    <span className="inline-flex items-center gap-1 text-green-600 dark:text-green-400">
+                                                        {billing.payment_date}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-gray-400">-</span>
+                                                )}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100 font-bold font-mono">
                                                 {billing.total ? `¥${billing.total.toLocaleString()}` : (billing.amount ? `¥${billing.amount.toLocaleString()}` : '-')}
@@ -371,6 +458,64 @@ export default function BillingsPage() {
                     </div>
                 </main>
             </div>
+
+            {/* Payment Date Modal */}
+            {showPaymentDateModal && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full">
+                        <div className="p-6">
+                            <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-4">
+                                入金日の入力
+                            </h3>
+                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                                請求書を「支払済」にするには、入金日を入力してください。
+                            </p>
+                            <div className="mb-6">
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    入金日 <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    type="date"
+                                    value={paymentDate}
+                                    onChange={(e) => setPaymentDate(e.target.value)}
+                                    className="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                    required
+                                />
+                            </div>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => {
+                                        setShowPaymentDateModal(false);
+                                        setPendingStatusChange(null);
+                                        setPaymentDate('');
+                                    }}
+                                    className="flex-1 px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                                >
+                                    キャンセル
+                                </button>
+                                <button
+                                    onClick={handleConfirmPaymentDate}
+                                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                                >
+                                    確定
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Contract Input Modal */}
+            <ContractInputModal
+                isOpen={showContractModal}
+                onClose={() => {
+                    setShowContractModal(false);
+                    setModalError(undefined);
+                }}
+                onSubmit={handleContractAnalysis}
+                isLoading={modalLoading}
+                error={modalError}
+            />
         </div>
     );
 }
