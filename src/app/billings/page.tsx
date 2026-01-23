@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, Suspense } from 'react';
 import Sidebar from '@/components/Sidebar';
 import { UserMenu } from '@/components/UserMenu';
 import { getBillings, deleteBilling, duplicateBilling, updateBillingStatus } from '@/app/actions/billings';
@@ -16,7 +16,7 @@ import { analyzeContractForInvoice } from '@/app/actions/analyze-contract';
 
 import { useRouter, useSearchParams } from 'next/navigation';
 
-export default function BillingsPage() {
+function BillingsContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const [billings, setBillings] = useState<(Billing & { contractPartyB?: string })[]>([]);
@@ -517,5 +517,13 @@ export default function BillingsPage() {
                 error={modalError}
             />
         </div>
+    );
+}
+
+export default function BillingsPage() {
+    return (
+        <Suspense fallback={<div className="flex h-screen items-center justify-center">Loading...</div>}>
+            <BillingsContent />
+        </Suspense>
     );
 }
