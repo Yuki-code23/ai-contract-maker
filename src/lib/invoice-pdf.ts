@@ -94,8 +94,11 @@ export async function generateInvoicePDF(
         };
 
         // --- Header ---
+        const isPayable = billing.billing_type === 'payable';
+        const title = isPayable ? '支払通知書' : '請求書';
+
         try {
-            drawText('請求書', width / 2, height - 50, 24, 'center');
+            drawText(title, width / 2, height - 50, 24, 'center');
         } catch (e) { console.error('Error drawing header:', e); }
 
         // Right Column: Sender Info
@@ -174,7 +177,8 @@ export async function generateInvoicePDF(
                 color: rgb(0, 0, 0),
             });
 
-            drawText(`お支払期限: ${billing.payment_deadline ? new Date(billing.payment_deadline).toLocaleDateString('ja-JP') : '-'}`, leftX, totalBoxY - 25, 10, 'left');
+            const dateLabel = isPayable ? '支払予定日' : 'お支払期限'; // Changed label
+            drawText(`${dateLabel}: ${billing.payment_deadline ? new Date(billing.payment_deadline).toLocaleDateString('ja-JP') : '-'}`, leftX, totalBoxY - 25, 10, 'left');
 
             // Table
             const tableTop = totalBoxY - 60;
@@ -198,7 +202,7 @@ export async function generateInvoicePDF(
             let taxable8 = 0;
 
             if (itemsList.length === 0 && subtotalVal > 0) {
-                drawText('ご請求費用', colX.desc, yPos, 10, 'left');
+                drawText(isPayable ? '支払金額' : 'ご請求費用', colX.desc, yPos, 10, 'left'); // Changed label
                 drawText('1', colX.qty, yPos, 10, 'right');
                 drawText('式', colX.unit, yPos, 10, 'center');
                 drawText(subtotalVal.toLocaleString(), colX.price, yPos, 10, 'right');
@@ -255,8 +259,8 @@ export async function generateInvoicePDF(
             drawText('合計', 350, yPos, 12, 'left', rgb(0, 0, 0));
             drawText(`¥${billingTotal.toLocaleString()}`, 500, yPos, 12, 'right', rgb(0, 0, 0));
 
-            // Bank
-            if (bankInfo) {
+            // Bank - Only show for receivables (Invoices)
+            if (bankInfo && !isPayable) {
                 const bankY = tableTop - 350;
                 drawText('【お振込先】', 50, bankY, 10, 'left');
                 drawText(`${bankInfo.bank_name || ''} ${bankInfo.branch_name || ''}`, 50, bankY - 15, 10, 'left');

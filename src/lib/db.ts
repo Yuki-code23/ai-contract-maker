@@ -80,6 +80,7 @@ export interface Billing {
     is_recurring?: boolean
     recurring_interval?: 'monthly' | 'quarterly' | 'yearly' | null
     pdf_url?: string
+    billing_type?: 'receivable' | 'payable' // Default: receivable
     created_at?: string
     updated_at?: string
 }

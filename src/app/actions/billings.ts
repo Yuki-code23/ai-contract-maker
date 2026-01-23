@@ -5,7 +5,7 @@ import { authOptions } from '@/auth'
 import { supabaseServer } from "@/lib/supabase/server"
 import { Billing } from "@/lib/db"
 
-export async function getBillings() {
+export async function getBillings(type: 'receivable' | 'payable' = 'receivable') {
     const session = await getServerSession(authOptions)
     if (!session?.user?.email) {
         throw new Error("Unauthorized")
@@ -21,6 +21,7 @@ export async function getBillings() {
             )
         `)
         .eq('user_email', session.user.email)
+        .eq('billing_type', type) // Filter by type
         .order('payment_deadline', { ascending: true })
 
     if (error) {
@@ -252,7 +253,9 @@ export async function duplicateBilling(id: number) {
 
     // 2. Prepare new data
     const { id: _, created_at: __, updated_at: ___, ...rest } = original
-    const newInvoiceNumber = `INV-COPY-${Date.now().toString().slice(-4)}`;
+    const newInvoiceNumber = rest.billing_type === 'payable'
+        ? `PAY-COPY-${Date.now().toString().slice(-4)}`
+        : `INV-COPY-${Date.now().toString().slice(-4)}`;
 
     // 3. Insert
     const { data, error: insertError } = await supabaseServer

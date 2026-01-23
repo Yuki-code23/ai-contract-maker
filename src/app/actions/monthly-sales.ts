@@ -11,6 +11,7 @@ export interface MonthlySalesData {
     monthLabel: string; // "2026年1月" or "2026/01"
     totalSales: number;
     invoiceCount: number;
+    companySales: Record<string, number>;
 }
 
 export interface InvoiceDetail {
@@ -72,7 +73,7 @@ export async function getMonthlySalesData(
         }
 
         // Group by month
-        const monthlyData = new Map<string, { totalSales: number; invoiceCount: number; year: number; month: number }>();
+        const monthlyData = new Map<string, { totalSales: number; invoiceCount: number; year: number; month: number; companySales: Record<string, number> }>();
 
         const now = new Date();
 
@@ -92,7 +93,7 @@ export async function getMonthlySalesData(
             const year = currentDate.getFullYear();
             const month = currentDate.getMonth() + 1;
             const key = `${year}-${month}`;
-            monthlyData.set(key, { totalSales: 0, invoiceCount: 0, year, month });
+            monthlyData.set(key, { totalSales: 0, invoiceCount: 0, year, month, companySales: {} });
 
             // Move to next month
             currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
@@ -117,8 +118,14 @@ export async function getMonthlySalesData(
 
             if (monthlyData.has(key)) {
                 const data = monthlyData.get(key)!;
-                data.totalSales += billing.total || billing.amount || 0;
+                const sales = billing.total || billing.amount || 0;
+                data.totalSales += sales;
                 data.invoiceCount += 1;
+
+                // Track by company
+                const companyName = (billing.client_info as any)?.name || '不明な取引先';
+                data.companySales[companyName] = (data.companySales[companyName] || 0) + sales;
+
                 console.log('[DEBUG] Added billing to month', key, '- New total:', data.totalSales);
             } else {
                 console.log('[DEBUG] Billing month', key, 'not in 12-month range');
@@ -133,11 +140,13 @@ export async function getMonthlySalesData(
                 monthLabel: `${item.year}/${String(item.month).padStart(2, '0')}`,
                 totalSales: item.totalSales,
                 invoiceCount: item.invoiceCount,
+                companySales: item.companySales,
             }))
             .sort((a, b) => {
                 if (a.year !== b.year) return a.year - b.year;
                 return a.month - b.month;
             });
+
 
         console.log('[DEBUG] Final result:', result);
 
@@ -182,7 +191,7 @@ export async function getMonthlySalesDataByCompany(
         }) || [];
 
         // Group by month
-        const monthlyData = new Map<string, { totalSales: number; invoiceCount: number; year: number; month: number }>();
+        const monthlyData = new Map<string, { totalSales: number; invoiceCount: number; year: number; month: number; companySales: Record<string, number> }>();
 
         const now = new Date();
 
@@ -200,7 +209,7 @@ export async function getMonthlySalesDataByCompany(
             const year = currentDate.getFullYear();
             const month = currentDate.getMonth() + 1;
             const key = `${year}-${month}`;
-            monthlyData.set(key, { totalSales: 0, invoiceCount: 0, year, month });
+            monthlyData.set(key, { totalSales: 0, invoiceCount: 0, year, month, companySales: {} });
 
             // Move to next month
             currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
@@ -217,8 +226,10 @@ export async function getMonthlySalesDataByCompany(
 
             if (monthlyData.has(key)) {
                 const data = monthlyData.get(key)!;
-                data.totalSales += billing.total || billing.amount || 0;
+                const sales = billing.total || billing.amount || 0;
+                data.totalSales += sales;
                 data.invoiceCount += 1;
+                data.companySales[companyName] = (data.companySales[companyName] || 0) + sales;
             }
         });
 
@@ -230,6 +241,7 @@ export async function getMonthlySalesDataByCompany(
                 monthLabel: `${item.year}/${String(item.month).padStart(2, '0')}`,
                 totalSales: item.totalSales,
                 invoiceCount: item.invoiceCount,
+                companySales: item.companySales,
             }))
             .sort((a, b) => {
                 if (a.year !== b.year) return a.year - b.year;

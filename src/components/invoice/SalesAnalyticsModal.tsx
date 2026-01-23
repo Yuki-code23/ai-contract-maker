@@ -12,6 +12,20 @@ import {
     InvoiceDetail,
 } from '@/app/actions/monthly-sales';
 import { useRouter } from 'next/navigation';
+import { Billing } from '@/lib/db';
+
+const COMPANY_COLORS = [
+    '#3b82f6', // blue-500
+    '#10b981', // emerald-500
+    '#f59e0b', // amber-500
+    '#ef4444', // red-500
+    '#8b5cf6', // violet-500
+    '#ec4899', // pink-500
+    '#06b6d4', // cyan-500
+    '#f97316', // orange-500
+    '#84cc16', // lime-500
+    '#14b8a6', // teal-500
+];
 
 interface SalesAnalyticsModalProps {
     isOpen: boolean;
@@ -80,8 +94,17 @@ export default function SalesAnalyticsModal({ isOpen, onClose }: SalesAnalyticsM
                 const result = await getMonthlySalesData(startYear, startMonth, endYear, endMonth);
                 console.log('[DEBUG Modal] Overall sales result:', result);
                 if (result.success && result.data) {
-                    setSalesData(result.data);
-                    console.log('[DEBUG Modal] salesData set to:', result.data);
+                    // Flatten data for Recharts (put company sales at top level with prefix to be safe)
+                    const flattenedData = result.data.map(item => {
+                        const flattened: any = { ...item };
+                        Object.entries(item.companySales).forEach(([name, sales]) => {
+                            // Use a prefix to avoid collision with standard properties and handle dots in names
+                            flattened[`comp_${name}`] = sales;
+                        });
+                        return flattened;
+                    });
+                    setSalesData(flattenedData);
+                    console.log('[DEBUG Modal] salesData set to (flattened):', flattenedData);
                     if (result.data.length === 0 || result.data.every(d => d.totalSales === 0)) {
                         console.warn('[DEBUG Modal] Warning: All sales data is 0');
                     }
@@ -94,7 +117,15 @@ export default function SalesAnalyticsModal({ isOpen, onClose }: SalesAnalyticsM
                     const result = await getMonthlySalesDataByCompany(selectedCompany, startYear, startMonth, endYear, endMonth);
                     console.log('[DEBUG Modal] Company sales result:', result);
                     if (result.success && result.data) {
-                        setSalesData(result.data);
+                        // Even for single company, flatten for consistency
+                        const flattenedData = result.data.map(item => {
+                            const flattened: any = { ...item };
+                            Object.entries(item.companySales).forEach(([name, sales]) => {
+                                flattened[`comp_${name}`] = sales;
+                            });
+                            return flattened;
+                        });
+                        setSalesData(flattenedData);
                     } else {
                         console.error('[DEBUG Modal] Failed to load company data:', result.error);
                     }
@@ -148,14 +179,33 @@ export default function SalesAnalyticsModal({ isOpen, onClose }: SalesAnalyticsM
         if (active && payload && payload.length) {
             const data = payload[0].payload as MonthlySalesData;
             return (
-                <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
-                    <p className="font-medium text-gray-900 dark:text-gray-100">{data.monthLabel}</p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                        売上: <span className="font-bold text-blue-600 dark:text-blue-400">¥{data.totalSales.toLocaleString()}</span>
-                    </p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                        請求書: {data.invoiceCount}件
-                    </p>
+                <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 max-w-xs">
+                    <p className="font-medium text-gray-900 dark:text-gray-100 mb-2">{data.monthLabel}</p>
+                    <div className="space-y-1 mb-2">
+                        {Object.entries(data.companySales || {})
+                            .filter(([_, sales]) => sales > 0)
+                            .sort(([_, a], [__, b]) => b - a)
+                            .map(([name, sales], idx) => (
+                                <div key={name} className="flex justify-between gap-4 text-xs">
+                                    <span className="text-gray-600 dark:text-gray-400 truncate max-w-[120px]" title={name}>
+                                        {name}:
+                                    </span>
+                                    <span className="font-semibold text-gray-900 dark:text-gray-100">
+                                        ¥{sales.toLocaleString()}
+                                    </span>
+                                </div>
+                            ))}
+                    </div>
+                    <div className="pt-2 border-t border-gray-100 dark:border-gray-700">
+                        <p className="text-sm text-gray-600 dark:text-gray-400 flex justify-between">
+                            <span>合計売上:</span>
+                            <span className="font-bold text-blue-600 dark:text-blue-400">¥{data.totalSales.toLocaleString()}</span>
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 flex justify-between">
+                            <span>請求書:</span>
+                            <span>{data.invoiceCount}件</span>
+                        </p>
+                    </div>
                 </div>
             );
         }
@@ -307,32 +357,59 @@ export default function SalesAnalyticsModal({ isOpen, onClose }: SalesAnalyticsM
                                     />
                                     <YAxis
                                         stroke="#9CA3AF"
-                                        style={{ fontSize: '12px' }}
-                                        tickFormatter={(value) => `¥${(value / 1000).toFixed(0)}K`}
+                                        style={{ fontSize: '10px' }}
+                                        tickFormatter={(value) => {
+                                            if (value >= 1e12) return `¥${(value / 1e12).toFixed(1)}T`;
+                                            if (value >= 1e9) return `¥${(value / 1e9).toFixed(1)}B`;
+                                            if (value >= 1e6) return `¥${(value / 1e6).toFixed(1)}M`;
+                                            if (value >= 1e3) return `¥${(value / 1e3).toFixed(0)}K`;
+                                            return `¥${value}`;
+                                        }}
                                     />
                                     <Tooltip content={<CustomTooltip />} />
-                                    <Bar
-                                        dataKey="totalSales"
-                                        radius={[8, 8, 0, 0]}
-                                        cursor="pointer"
-                                        minPointSize={5}
-                                        onClick={(data: any) => {
-                                            if (data && data.payload) {
-                                                handleBarClick(data.payload as MonthlySalesData);
-                                            }
-                                        }}
-                                    >
-                                        {salesData.map((entry, index) => (
-                                            <Cell
-                                                key={`cell-${index}`}
-                                                fill={
-                                                    selectedMonth?.year === entry.year && selectedMonth?.month === entry.month
-                                                        ? '#2563eb'
-                                                        : '#60a5fa'
-                                                }
+                                    {viewMode === 'overall' ? (
+                                        companies.map((company, index) => (
+                                            <Bar
+                                                key={company}
+                                                dataKey={`comp_${company}`}
+                                                name={company}
+                                                stackId="a"
+                                                fill={COMPANY_COLORS[index % COMPANY_COLORS.length]}
+                                                radius={[0, 0, 0, 0]}
+                                                cursor="pointer"
+                                                minPointSize={2}
+                                                onClick={(data: any) => {
+                                                    if (data && data.payload) {
+                                                        handleBarClick(data.payload as MonthlySalesData);
+                                                    }
+                                                }}
                                             />
-                                        ))}
-                                    </Bar>
+                                        ))
+                                    ) : (
+                                        <Bar
+                                            dataKey="totalSales"
+                                            fill="#3b82f6"
+                                            radius={[8, 8, 0, 0]}
+                                            cursor="pointer"
+                                            minPointSize={5}
+                                            onClick={(data: any) => {
+                                                if (data && data.payload) {
+                                                    handleBarClick(data.payload as MonthlySalesData);
+                                                }
+                                            }}
+                                        >
+                                            {salesData.map((entry, index) => (
+                                                <Cell
+                                                    key={`cell-${index}`}
+                                                    fill={
+                                                        selectedMonth?.year === entry.year && selectedMonth?.month === entry.month
+                                                            ? '#2563eb'
+                                                            : '#60a5fa'
+                                                    }
+                                                />
+                                            ))}
+                                        </Bar>
+                                    )}
                                 </BarChart>
                             </ResponsiveContainer>
                         )}

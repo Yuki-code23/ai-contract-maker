@@ -22,7 +22,7 @@ const DEFAULT_ITEM: InvoiceItem = {
     taxRate: 10
 };
 
-export default function InvoiceForm() {
+export default function InvoiceForm({ type = 'receivable' }: { type?: 'receivable' | 'payable' }) {
     const router = useRouter();
     const searchParams = useSearchParams();
     const duplicateId = searchParams.get('duplicateId');
@@ -39,6 +39,19 @@ export default function InvoiceForm() {
     const [items, setItems] = useState<InvoiceItem[]>([{ ...DEFAULT_ITEM }]);
     const [isRecurring, setIsRecurring] = useState(false);
     const [recurringInterval, setRecurringInterval] = useState<'monthly' | 'quarterly' | 'yearly'>('monthly');
+
+    // Text Labels based on type
+    const isPayable = type === 'payable';
+    const labels = {
+        title: isPayable ? (editId ? '支払通知書を編集' : '新規支払通知書作成') : (editId ? '請求書を編集' : '新規請求書作成'),
+        client: isPayable ? '支払先 (乙)' : '取引先名 (乙)',
+        number: isPayable ? '支払番号' : '請求番号',
+        date: isPayable ? '支払日' : 'お支払期限', // This maps to payment_deadline
+        issueDate: '発行日',
+        submit: isPayable ? '支払通知書を保存' : '請求書を保存',
+        previewTitle: isPayable ? '支払通知書' : '請求書',
+        totalLabel: isPayable ? '支払金額' : 'ご請求金額',
+    };
 
     // Suggestion State
     const [companies, setCompanies] = useState<string[]>([]);
@@ -61,7 +74,8 @@ export default function InvoiceForm() {
     useEffect(() => {
         // Only auto-generate if NOT editing
         if (!editId) {
-            setInvoiceNumber(`INV-${new Date().getFullYear()}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`);
+            const prefix = isPayable ? 'PAY' : 'INV';
+            setInvoiceNumber(`${prefix}-${new Date().getFullYear()}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`);
         }
 
         const loadInitialData = async () => {
@@ -171,7 +185,7 @@ export default function InvoiceForm() {
             }
         };
         loadInitialData();
-    }, [duplicateId, editId, fromContract, contractId]);
+    }, [duplicateId, editId, fromContract, contractId, isPayable]); // Added isPayable
 
     // Close suggestions when clicking outside
     useEffect(() => {
@@ -244,20 +258,21 @@ export default function InvoiceForm() {
                 tax_total: taxTotal,
                 total: total,
                 is_recurring: isRecurring,
-                recurring_interval: isRecurring ? recurringInterval : null
+                recurring_interval: isRecurring ? recurringInterval : null,
+                billing_type: type // Save the type
             };
 
             if (editId) {
                 const result = await updateBilling(Number(editId), billingData);
                 if (result.success) {
-                    alert('請求書を更新しました');
-                    router.push('/billings');
+                    alert(`${labels.previewTitle}を更新しました`);
+                    router.push(isPayable ? '/payments' : '/billings');
                 }
             } else {
                 const result = await createBilling(billingData);
                 if (result.success) {
-                    alert('請求書を作成しました');
-                    router.push('/billings');
+                    alert(`${labels.previewTitle}を作成しました`);
+                    router.push(isPayable ? '/payments' : '/billings');
                 }
             }
         } catch (error: any) {
@@ -278,7 +293,7 @@ export default function InvoiceForm() {
             <div className="bg-gray-50 dark:bg-gray-900 px-8 py-6 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
                 <h2 className="text-xl font-bold flex items-center gap-2">
                     <FileText className="w-5 h-5 text-blue-600" />
-                    {editId ? '請求書を編集' : '新規請求書作成'}
+                    {labels.title}
                 </h2>
                 <div className="text-sm text-gray-500">
                     ステータス: <span className="font-medium text-gray-900 dark:text-gray-100">下書き</span>
@@ -290,7 +305,7 @@ export default function InvoiceForm() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="space-y-4">
                         <div className="relative" ref={clientInputRef}>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">取引先名 (乙)</label>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{labels.client}</label>
                             <input
                                 type="text"
                                 value={clientName}
@@ -367,7 +382,7 @@ export default function InvoiceForm() {
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">請求番号</label>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{labels.number}</label>
                             <input
                                 type="text"
                                 value={invoiceNumber}
@@ -378,7 +393,7 @@ export default function InvoiceForm() {
                     </div>
                     <div className="space-y-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">請求日</label>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{labels.issueDate}</label>
                             <input
                                 type="date"
                                 value={issueDate}
@@ -387,7 +402,7 @@ export default function InvoiceForm() {
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">お支払期限</label>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{labels.date}</label>
                             <input
                                 type="date"
                                 value={dueDate}
@@ -548,7 +563,7 @@ export default function InvoiceForm() {
                         disabled={loading}
                     >
                         <Save className="w-4 h-4" />
-                        {loading ? '保存中...' : '請求書を保存'}
+                        {loading ? '保存中...' : labels.submit}
                     </button>
                 </div>
             </div>
@@ -558,7 +573,7 @@ export default function InvoiceForm() {
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
                     <div className="bg-white dark:bg-white text-black w-full max-w-[800px] h-[90vh] flex flex-col rounded-lg shadow-2xl">
                         <div className="p-4 border-b flex justify-between items-center bg-gray-50 rounded-t-lg">
-                            <h3 className="font-bold">請求書プレビュー</h3>
+                            <h3 className="font-bold">{labels.previewTitle}プレビュー</h3>
                             <button onClick={() => setShowPreview(false)} className="p-1 hover:bg-gray-200 rounded">
                                 <Plus className="w-6 h-6 rotate-45" />
                             </button>
@@ -566,10 +581,10 @@ export default function InvoiceForm() {
                         <div className="flex-1 overflow-y-auto p-12 bg-white font-sans text-sm">
                             {/* PDF Mimic UI */}
                             <div className="flex justify-between items-start mb-8">
-                                <h1 className="text-3xl font-bold tracking-widest text-gray-800">請求書</h1>
+                                <h1 className="text-3xl font-bold tracking-widest text-gray-800">{labels.previewTitle}</h1>
                                 <div className="text-right">
-                                    <p className="text-sm">請求書番号: {invoiceNumber}</p>
-                                    <p className="text-sm">発行日: {issueDate}</p>
+                                    <p className="text-sm">{labels.number}: {invoiceNumber}</p>
+                                    <p className="text-sm">{labels.issueDate}: {issueDate}</p>
                                 </div>
                             </div>
 
@@ -579,8 +594,8 @@ export default function InvoiceForm() {
                                         <p className="text-xl font-bold">{clientName} 御中</p>
                                     </div>
                                     <div className="pt-2">
-                                        <p className="text-lg">ご請求金額: <span className="text-2xl font-bold border-b border-gray-400">¥{total.toLocaleString()}-</span></p>
-                                        <p className="text-xs text-gray-500 mt-1">（税込 / 支払期限: {dueDate}）</p>
+                                        <p className="text-lg">{labels.totalLabel}: <span className="text-2xl font-bold border-b border-gray-400">¥{total.toLocaleString()}-</span></p>
+                                        <p className="text-xs text-gray-500 mt-1">（税込 / {labels.date}: {dueDate}）</p>
                                     </div>
                                 </div>
                                 <div className="text-right flex items-start gap-4">
@@ -646,7 +661,7 @@ export default function InvoiceForm() {
                                 </div>
                             </div>
 
-                            {userSettings?.bank_info && (
+                            {userSettings?.bank_info && !isPayable && (
                                 <div className="mt-12 p-4 border border-gray-100 bg-gray-50 rounded">
                                     <p className="text-xs font-bold mb-2">【お振込先】</p>
                                     <p className="text-sm">{userSettings.bank_info.bank_name} {userSettings.bank_info.branch_name}</p>
